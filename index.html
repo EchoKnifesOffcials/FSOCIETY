@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Honeypot Lab - Network Monitor Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: linear-gradient(135deg, #0a0a0a, #1a1a2e);
+            color: #00ff00;
+            font-family: 'Courier New', 'Monaco', monospace;
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        .header {
+            background: rgba(0,0,0,0.8);
+            border: 2px solid #00ff00;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 10px;
+            text-align: center;
+        }
+
+        .header h1 {
+            color: #ff0000;
+            text-shadow: 0 0 10px red;
+            margin-bottom: 10px;
+        }
+
+        .warning {
+            background: #ff000020;
+            border: 1px solid #ff0000;
+            padding: 10px;
+            margin: 10px 0;
+            color: #ff6666;
+            font-size: 12px;
+        }
+
+        .dashboard {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .panel {
+            background: rgba(0,0,0,0.8);
+            border: 1px solid #00ff00;
+            border-radius: 10px;
+            padding: 15px;
+            overflow: hidden;
+        }
+
+        .panel h3 {
+            color: #00ff00;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #00ff00;
+        }
+
+        .log-container {
+            height: 400px;
+            overflow-y: auto;
+            font-size: 12px;
+            font-family: monospace;
+        }
+
+        .log-entry {
+            padding: 5px;
+            margin: 2px 0;
+            border-left: 3px solid;
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .log-http { border-left-color: #00ff00; color: #aaffaa; }
+        .log-password { border-left-color: #ff0000; color: #ff6666; font-weight: bold; background: #ff000010; }
+        .-log-ssh { border-left-color: #ffaa00; color: #ffcc66; }
+        .log-info { border-left-color: #00aaff; color: #88ccff; }
+        .log-warning { border-left-color: #ff6600; color: #ffaa66; }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            background: rgba(0,0,0,0.8);
+            border: 1px solid #00ff00;
+            border-radius: 10px;
+            padding: 15px;
+            text-align: center;
+        }
+
+        .stat-number {
+            font-size: 32px;
+            font-weight: bold;
+            color: #ff0000;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            margin-top: 5px;
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        button {
+            background: #00ff00;
+            color: #000;
+            border: none;
+            padding: 10px 20px;
+            cursor: pointer;
+            font-family: monospace;
+            font-weight: bold;
+            border-radius: 5px;
+        }
+
+        button:hover {
+            background: #ff0000;
+            color: #fff;
+            transform: scale(1.05);
+        }
+
+        button.danger {
+            background: #ff0000;
+            color: #fff;
+        }
+
+        input, textarea {
+            background: #111;
+            border: 1px solid #00ff00;
+            color: #00ff00;
+            padding: 8px;
+            font-family: monospace;
+            width: 100%;
+            margin: 5px 0;
+        }
+
+        .fake-form {
+            background: rgba(0,0,0,0.6);
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+        }
+
+        .timestamp {
+            color: #888;
+            font-size: 10px;
+        }
+
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #000;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #00ff00;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🔒 HONEYPOT LABORATORY - NETWORK MONITOR 🔒</h1>
+        <div class="warning">
+            ⚠️ LABORATORY USE ONLY - Authorized Testing Environment ⚠️<br>
+            Network: Free Wifi (HPPT) | All actions are being logged | Do not use on real networks
+        </div>
+    </div>
+
+    <div class="stats">
+        <div class="stat-card">
+            <div class="stat-number" id="totalConnections">0</div>
+            <div class="stat-label">Total Connections</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number" id="passwordsCaptured">0</div>
+            <div class="stat-label">Passwords Captured</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number" id="uniqueIPs">0</div>
+            <div class="stat-label">Unique IPs</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number" id="attackAttempts">0</div>
+            <div class="stat-label">Attack Attempts</div>
+        </div>
+    </div>
+
+    <div class="controls">
+        <button onclick="exportLogs()">📥 Export Logs (JSON)</button>
+        <button onclick="clearLogs()" class="danger">🗑️ Clear Logs</button>
+        <button onclick="playWarning()">🔊 Test Audio Warning</button>
+        <button onclick="simulateAttack()">🎭 Simulate Attack</button>
+    </div>
+
+    <div class="dashboard">
+        <div class="panel">
+            <h3>📡 Live Network Logs</h3>
+            <div class="log-container" id="liveLogs">
+                <div class="log-entry log-info">[System] Honeypot initialized</div>
+                <div class="log-entry log-info">[System] Fake network: Free Wifi (HPPT)</div>
+                <div class="log-entry log-info">[System] Monitoring all connections...</div>
+            </div>
+        </div>
+
+        <div class="panel">
+            <h3>🔑 Captured Credentials</h3>
+            <div class="log-container" id="credentialsLog">
+                <div class="log-entry log-info">[System] Waiting for login attempts...</div>
+            </div>
+        </div>
+
+        <div class="panel">
+            <h3>🌐 Fake Login Portal (Honeypot)</h3>
+            <div class="fake-form">
+                <p style="color: #ff0000; margin-bottom: 10px;">⚠️ This is a fake portal - credentials will be logged ⚠️</p>
+                <form id="fakeLoginForm">
+                    <input type="text" id="fakeUsername" placeholder="Email / Username" autocomplete="off">
+                    <input type="password" id="fakePassword" placeholder="Password" autocomplete="off">
+                    <button type="submit">Login to Network</button>
+                </form>
+                <div class="warning" style="font-size: 10px; margin-top: 10px;">
+                    * For educational purposes - simulates credential harvesting
+                </div>
+            </div>
+
+            <div class="fake-form">
+                <p style="color: #ffaa00; margin-bottom: 10px;">💳 Fake Payment Page</p>
+                <form id="fakePaymentForm">
+                    <input type="text" placeholder="Credit Card Number" id="fakeCard">
+                    <input type="text" placeholder="Expiry (MM/YY)" id="fakeExpiry">
+                    <input type="text" placeholder="CVV" id="fakeCVV">
+                    <button type="submit">Verify Payment</button>
+                </form>
+            </div>
+        </div>
+
+        <div class="panel">
+            <h3>📊 Attack Simulation Panel</h3>
+            <div class="fake-form">
+                <button onclick="simulateBruteForce()">💀 Simulate Brute Force Attack</button>
+                <button onclick="simulateSQLInjection()">🗄️ Simulate SQL Injection</button>
+                <button onclick="simulateXSS()">📝 Simulate XSS Attempt</button>
+            </div>
+            <div class="fake-form">
+                <h4 style="font-size: 14px; margin-bottom: 10px;">🖥️ Fake SSH Login (Telnet Style)</h4>
+                <input type="text" id="sshUser" placeholder="Username">
+                <input type="password" id="sshPass" placeholder="Password">
+                <button onclick="simulateSSH()">Connect via SSH</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Store all logs and data
+        let logs = [];
+        let credentials = [];
+        let uniqueIPs = new Set();
+        let connectionCount = 0;
+        let attackCount = 0;
+
+        // Get visitor's IP (for simulation)
+        async function getVisitorIP() {
+            try {
+                const response = await fetch('https://api.ipify.org?format=json');
+                const data = await response.json();
+                return data.ip;
+            } catch(e) {
+                return '127.0.0.1';
+            }
+        }
+
+        // Add log entry
+        function addLog(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = {
+                timestamp: timestamp,
+                message: message,
+                type: type,
+                ip: localStorage.getItem('visitorIP') || 'unknown'
+            };
+            
+            logs.unshift(logEntry);
+            
+            // Update UI
+            const logContainer = document.getElementById('liveLogs');
+            const logDiv = document.createElement('div');
+            logDiv.className = `log-entry log-${type}`;
+            logDiv.innerHTML = `<span class="timestamp">[${timestamp}]</span> ${message}`;
+            logContainer.insertBefore(logDiv, logContainer.firstChild);
+            
+            // Limit logs displayed
+            while(logContainer.children.length > 100) {
+                logContainer.removeChild(logContainer.lastChild);
+            }
+            
+            updateStats();
+        }
+
+        // Add credential log
+        function addCredential(type, data) {
+            const timestamp = new Date().toLocaleTimeString();
+            const credentialEntry = {
+                timestamp: timestamp,
+                type: type,
+                data: data,
+                ip: localStorage.getItem('visitorIP') || 'unknown',
+                userAgent: navigator.userAgent
+            };
+            
+            credentials.unshift(credentialEntry);
+            
+            // Update UI
+            const credContainer = document.getElementById('credentialsLog');
+            const credDiv = document.createElement('div');
+            credDiv.className = 'log-entry log-password';
+            credDiv.innerHTML = `<span class="timestamp">[${timestamp}]</span> <strong>${type}:</strong> ${JSON.stringify(data)}<br>
+                                <span style="font-size: 10px; color: #888;">IP: ${credentialEntry.ip}</span>`;
+            credContainer.insertBefore(credDiv, credContainer.firstChild);
+            
+            // Update password count
+            document.getElementById('passwordsCaptured').innerText = credentials.length;
+            
+            // Auto-save to localStorage
+            saveToLocalStorage();
+            
+            // Play warning sound when credentials captured
+            playCredentialWarning();
+        }
+
+        // Update statistics
+        function updateStats() {
+            document.getElementById('totalConnections').innerText = connectionCount;
+            document.getElementById('uniqueIPs').innerText = uniqueIPs.size;
+            document.getElementById('attackAttempts').innerText = attackCount;
+        }
+
+        // Play audio warning
+        function playWarning() {
+            if ('speechSynthesis' in window) {
+                const msg = new SpeechSynthesisUtterance();
+                msg.text = "FSOCIETY HAS YOUR IP. Your credentials have been captured.";
+                msg.volume = 1;
+                msg.rate = 0.9;
+                window.speechSynthesis.speak(msg);
+            }
+            
+            // Beep sound
+            try {
+                const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                const oscillator = audioCtx.createOscillator();
+                const gainNode = audioCtx.createGain();
+                oscillator.connect(gainNode);
+                gainNode.connect(audioCtx.destination);
+                oscillator.frequency.value = 880;
+                gainNode.gain.value = 0.3;
+                oscillator.start();
+                setTimeout(() => oscillator.stop(), 200);
+                setTimeout(() => {
+                    const osc2 = audioCtx.createOscillator();
+                    osc2.connect(gainNode);
+                    osc2.frequency.value = 440;
+                    osc2.start();
+                    setTimeout(() => osc2.stop(), 200);
+                }, 300);
+            } catch(e) {}
+        }
+
+        function playCredentialWarning() {
+            if (credentials.length % 3 === 0) {
+                playWarning();
+            }
+        }
+
+        // Save logs to localStorage
+        function saveToLocalStorage() {
+            const exportData = {
+                logs: logs,
+                credentials: credentials,
+                stats: {
+                    connections: connectionCount,
+                    attacks: attackCount,
+                    uniqueIPs: Array.from(uniqueIPs)
+                },
+                exportTime: new Date().toISOString()
+            };
+            localStorage.setItem('honeypotData', JSON.stringify(exportData));
+        }
+
+        // Export logs
+        function exportLogs() {
+            const exportData = {
+                logs: logs,
+                credentials: credentials,
+                stats: {
+                    connections: connectionCount,
+                    attacks: attackCount,
+                    uniqueIPs: Array.from(uniqueIPs)
+                },
+                exportTime: new Date().toISOString(),
+                network: "Free Wifi (HPPT)"
+            };
+            
+            const dataStr = JSON.stringify(exportData, null, 2);
+            const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+            const exportFileDefaultName = `honeypot_logs_${Date.now()}.json`;
+            
+            const linkElement = document.createElement('a');
+            linkElement.setAttribute('href', dataUri);
+            linkElement.setAttribute('download', exportFileDefaultName);
+            linkElement.click();
+            
+            addLog(`Logs exported: ${exportFileDefaultName}`, 'info');
+        }
+
+        // Clear logs
+        function clearLogs() {
+            if(confirm('⚠️ This will clear ALL logs. Are you sure?')) {
+                logs = [];
+                credentials = [];
+                document.getElementById('liveLogs').innerHTML = '<div class="log-entry log-info">[System] Logs cleared</div>';
+                document.getElementById('credentialsLog').innerHTML = '<div class="log-entry log-info">[System] Credentials cleared</div>';
+                addLog('All logs cleared by user', 'warning');
+                document.getElementById('passwordsCaptured').innerText = '0';
+            }
+        }
+
+        // Simulate attacks
+        function simulateBruteForce() {
+            attackCount++;
+            const usernames = ['admin', 'root', 'user', 'test', 'administrator'];
+            const passwords = ['password', '123456', 'admin', 'toor', 'password123'];
+            
+            const randomUser = usernames[Math.floor(Math.random() * usernames.length)];
+            const randomPass = passwords[Math.floor(Math.random() * passwords.length)];
+            
+            addLog(`[BRUTE FORCE] Attempt: ${randomUser}:${randomPass}`, 'warning');
+            addCredential('Brute Force Attempt', {username: randomUser, password: randomPass, method: 'SSH Brute Force'});
+            updateStats();
+        }
+
+        function simulateSQLInjection() {
+            attackCount++;
+            const payloads = ["' OR '1'='1", "admin' --", "1; DROP TABLE users--", "' UNION SELECT * FROM users--"];
+            const payload = payloads[Math.floor(Math.random() * payloads.length)];
+            addLog(`[SQL INJECTION] Payload detected: ${payload}`, 'warning');
+            addCredential('SQL Injection Attempt', {payload: payload, target: 'login_form'});
+            updateStats();
+        }
+
+        function simulateXSS() {
+            attackCount++;
+            const payloads = ["<script>alert('XSS')</script>", "<img src=x onerror=alert(1)>", "javascript:alert('XSS')"];
+            const payload = payloads[Math.floor(Math.random() * payloads.length)];
+            addLog(`[XSS ATTEMPT] Payload: ${payload}`, 'warning');
+            addCredential('XSS Attempt', {payload: payload, vector: 'script_injection'});
+            updateStats();
+        }
+
+        function simulateSSH() {
+            const user = document.getElementById('sshUser').value;
+            const pass = document.getElementById('sshPass').value;
+            
+            if(user || pass) {
+                attackCount++;
+                addLog(`[SSH] Login attempt: ${user} / ${pass}`, 'warning');
+                addCredential('SSH Credentials', {username: user, password: pass, service: 'SSH', port: 22});
+                document.getElementById('sshUser').value = '';
+                document.getElementById('sshPass').value = '';
+                updateStats();
+                playWarning();
+            }
+        }
+
+        // Initialize and track visitor
+        async function init() {
+            const ip = await getVisitorIP();
+            localStorage.setItem('visitorIP', ip);
+            uniqueIPs.add(ip);
+            connectionCount++;
+            
+            addLog(`[CONNECTION] New connection from IP: ${ip}`, 'http');
+            addLog(`[USER AGENT] ${navigator.userAgent}`, 'info');
+            addLog(`[NETWORK] Connected to: Free Wifi (HPPT)`, 'info');
+            
+            // Load previous data if exists
+            const savedData = localStorage.getItem('honeypotData');
+            if(savedData) {
+                addLog('[System] Previous session data loaded', 'info');
+            }
+            
+            updateStats();
+            
+            // Start monitoring interval
+            setInterval(() => {
+                addLog('[MONITOR] Network scan in progress...', 'info');
+            }, 30000);
+        }
+
+        // Form handlers
+        document.getElementById('fakeLoginForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const username = document.getElementById('fakeUsername').value;
+            const password = document.getElementById('fakePassword').value;
+            
+            if(username && password) {
+                addCredential('Login Credentials', {username: username, password: password, type: 'Web Login'});
+                addLog(`[CREDENTIAL HARVEST] Username: ${username}, Password: ${password}`, 'password');
+                playWarning();
+                
+                // Clear form
+                document.getElementById('fakeUsername').value = '';
+                document.getElementById('fakePassword').value = '';
+                
+                // Show fake error
+                alert("Network Error: Authentication failed. Please try again later.");
+            }
+        });
+        
+        document.getElementById('fakePaymentForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+   
