@@ -1,28 +1,48 @@
 --[[
-    DISCORD WEBHOOK LOGGER FOR YOUR BOT
-    Tracks your bot's trades and customer deliveries
-    For monitoring ONLY - no player tracking
+    MM2 TABLET TRADE BOT FOR DELTA
+    - Forces tablet/mobile UI
+    - Sends trade when player says "!hello"
+    - Auto-accepts all incoming trades
+    - Discord logging
 ]]
 
 local player = game:GetService("Players").LocalPlayer
-local HttpService = game:GetService("HttpService")
+local chatService = game:GetService("Chat")
+local replicatedStorage = game:GetService("ReplicatedStorage")
+local userInputService = game:GetService("UserInputService")
+local httpService = game:GetService("HttpService")
 
--- YOUR WEBHOOK URL
+-- ===== DISCORD WEBHOOK =====
 local webhookURL = "https://discord.com/api/webhooks/1488808773492543508/bpbJDBX3v1LLJXo0ri3xbi1Lbpu7BGXzVR1z4aCy1pP0bFqJsRrqM_ncNTi5ToDiCZ4d"
 
--- Send message to Discord
+-- ===== FORCE TABLET/MOBILE UI =====
+local function forceTabletUI()
+    -- Force mobile/touch interface
+    pcall(function()
+        userInputService.TouchEnabled = true
+        userInputService.MouseEnabled = false
+        game:GetService("StarterGui"):SetCoreGuiEnabled(Enum.CoreGuiType.Chat, true)
+        game:GetService("StarterGui"):SetCoreGuiEnabled(Enum.CoreGuiType.PlayerList, true)
+    end)
+    
+    -- Set tablet resolution
+    pcall(function()
+        sethiddenproperty(game:GetService("UserInputService"), "TouchEnabled", true)
+        sethiddenproperty(game:GetService("UserInputService"), "MouseEnabled", false)
+    end)
+end
+
+-- ===== DISCORD LOG FUNCTION =====
 local function sendToDiscord(message, color)
-    color = color or 5814783 -- Default blue
+    color = color or 5814783
     
     local data = {
         embeds = {{
-            title = "🤖 EchoKnives Bot Monitor",
+            title = "🤖 EchoKnives Trade Bot",
             description = message,
             color = color,
             timestamp = os.date("!%Y-%m-%dT%H:%M:%S"),
-            footer = {
-                text = "Bot: " .. player.Name
-            }
+            footer = {text = "Bot: " .. player.Name}
         }}
     }
     
@@ -33,132 +53,291 @@ local function sendToDiscord(message, color)
                 Url = webhookURL,
                 Method = "POST",
                 Headers = {["Content-Type"] = "application/json"},
-                Body = HttpService:JSONEncode(data)
+                Body = httpService:JSONEncode(data)
             })
         end)
     end
 end
 
--- Log trade completion
-local function logTradeCompleted(customerName, items)
-    local message = string.format(
-        "✅ **Trade Completed**\n" ..
-        "👤 Customer: %s\n" ..
-        "📦 Items: %s\n" ..
-        "🕐 Time: %s",
-        customerName,
-        items,
-        os.date("%I:%M:%S %p")
-    )
-    sendToDiscord(message, 65280) -- Green
-end
-
--- Log trade failure
-local function logTradeFailed(customerName, reason)
-    local message = string.format(
-        "❌ **Trade Failed**\n" ..
-        "👤 Customer: %s\n" ..
-        "⚠️ Reason: %s\n" ..
-        "🕐 Time: %s",
-        customerName,
-        reason,
-        os.date("%I:%M:%S %p")
-    )
-    sendToDiscord(message, 16711680) -- Red
-end
-
--- Log bot status
-local function logBotStatus(status)
-    local message = string.format(
-        "🟢 **Bot Status Update**\n" ..
-        "📊 Status: %s\n" ..
-        "🕐 Time: %s",
-        status,
-        os.date("%I:%M:%S %p")
-    )
-    sendToDiscord(message, 5814783) -- Blue
-end
-
--- Log trade request sent
-local function logTradeSent(customerName, items)
-    local message = string.format(
-        "📤 **Trade Request Sent**\n" ..
-        "👤 Customer: %s\n" ..
-        "📦 Items: %s\n" ..
-        "⏳ Waiting for acceptance...",
-        customerName,
-        items
-    )
-    sendToDiscord(message, 16776960) -- Yellow
-end
-
--- Example usage in your bot:
-local function processCustomerOrder(customerName, items)
-    -- Log that we're processing
-    logTradeSent(customerName, items)
+-- ===== SEND TRADE REQUEST (TABLET/MOBILE UI) =====
+local function sendTradeRequest(username)
+    local targetPlayer = nil
     
-    -- Send trade request (your existing code)
-    local success = sendTradeRequest(customerName, items)
-    
-    if success then
-        -- Wait for trade to complete (your existing auto-accept)
-        task.wait(10) -- Adjust based on your bot
-        
-        -- Log completion
-        logTradeCompleted(customerName, items)
-    else
-        logTradeFailed(customerName, "Player not found or offline")
+    -- Find player
+    for _, plr in pairs(game:GetService("Players"):GetPlayers()) do
+        if plr.Name:lower() == username:lower() or (plr.DisplayName and plr.DisplayName:lower() == username:lower()) then
+            targetPlayer = plr
+            break
+        end
     end
+    
+    if not targetPlayer then
+        sendToDiscord("❌ Player not found: " .. username, 16711680)
+        return false
+    end
+    
+    -- Method 1: Find tablet trade button
+    local success = false
+    
+    pcall(function()
+        local playerList = player.PlayerGui:FindFirstChild("PlayerList")
+        if playerList then
+            -- Search for player row
+            for _, frame in pairs(playerList:GetDescendants()) do
+                if frame:IsA("Frame") then
+                    -- Find name label
+                    local nameLabel = frame:FindFirstChild("NameLabel") or 
+                                     frame:FindFirstChild("Username") or
+                                     frame:FindFirstChild("PlayerName")
+                    
+                    if nameLabel and nameLabel:IsA("TextLabel") then
+                        if nameLabel.Text:lower() == username:lower() then
+                            -- Find trade button in same row
+                            local tradeBtn = frame:FindFirstChild("TradeButton") or
+                                            frame:FindFirstChild("Trade") or
+                                            frame:FindFirstChild("RequestTrade")
+                            
+                            if tradeBtn and tradeBtn:IsA("TextButton") then
+                                tradeBtn:Click()
+                                success = true
+                                sendToDiscord("📤 Trade request sent to: " .. username, 16776960)
+                                return
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end)
+    
+    -- Method 2: Try remote events (fallback)
+    if not success then
+        pcall(function()
+            for _, remote in pairs(replicatedStorage:GetChildren()) do
+                if remote:IsA("RemoteEvent") and (remote.Name:lower():find("trade") or remote.Name:lower():find("request")) then
+                    remote:FireServer(targetPlayer)
+                    success = true
+                    sendToDiscord("📤 Trade request sent (remote): " .. username, 16776960)
+                    break
+                end
+            end
+        end)
+    end
+    
+    if not success then
+        sendToDiscord("⚠️ Could not send trade request to: " .. username, 16711680)
+    end
+    
+    return success
 end
 
--- Monitor auto-accept trades
-local function monitorAutoAccept()
+-- ===== AUTO-ACCEPT TRADES =====
+local function autoAcceptTrades()
     pcall(function()
+        -- Look for trade GUI (tablet version)
         local tradeGui = player.PlayerGui:FindFirstChild("TradeGUI")
-        if tradeGui then
-            local accept = tradeGui:FindFirstChild("Accept")
-            if accept and accept.Visible then
-                -- Get customer name from GUI
+        if not tradeGui then
+            tradeGui = player.PlayerGui:FindFirstChild("Trade")
+        end
+        
+        if tradeGui and tradeGui.Enabled then
+            -- Find accept button
+            local acceptBtn = tradeGui:FindFirstChild("Accept") or
+                             tradeGui:FindFirstChild("AcceptButton") or
+                             tradeGui:FindFirstChild("Confirm")
+            
+            if acceptBtn and acceptBtn:IsA("TextButton") and acceptBtn.Visible then
+                -- Get customer name
                 local customerName = "Unknown"
-                local nameLabel = tradeGui:FindFirstChild("PlayerName")
+                local nameLabel = tradeGui:FindFirstChild("PlayerName") or 
+                                 tradeGui:FindFirstChild("Username")
                 if nameLabel then
                     customerName = nameLabel.Text
                 end
                 
-                accept:Click()
+                acceptBtn:Click()
+                sendToDiscord("✅ Auto-accepted trade with: " .. customerName, 65280)
                 
-                -- Log the auto-accepted trade
-                local message = string.format(
-                    "🤝 **Auto-Accepted Trade**\n" ..
-                    "👤 Trading with: %s\n" ..
-                    "🕐 Time: %s",
-                    customerName,
-                    os.date("%I:%M:%S %p")
-                )
-                sendToDiscord(message, 65280)
+                -- Send completion message
+                task.wait(2)
+                pcall(function()
+                    chatService:Chat(player.Character.Head, "Trade completed! Thank you!", Enum.ChatColor.Green)
+                end)
             end
         end
     end)
 end
 
--- Bot status on startup
-logBotStatus("Bot Online - Ready to process orders")
+-- ===== MONITOR CHAT FOR "!hello" =====
+local function monitorChat()
+    pcall(function()
+        -- Hook into chat messages
+        local chatFrame = player.PlayerGui:FindFirstChild("Chat")
+        if chatFrame then
+            local chatLog = chatFrame:FindFirstChild("ChatLog")
+            if chatLog then
+                chatLog.ChildAdded:Connect(function(message)
+                    task.wait(0.5)
+                    -- Check message content
+                    if message:IsA("TextLabel") then
+                        local text = message.Text
+                        if text and text:lower():find("!hello") then
+                            -- Extract username from message
+                            local username = text:match("^(.-):")
+                            if username then
+                                username = username:gsub("%s+", "")
+                                sendToDiscord("💬 Received !hello from: " .. username, 5814783)
+                                sendTradeRequest(username)
+                            end
+                        end
+                    end
+                end)
+            end
+        end
+    end)
+end
 
--- Monitor bot health
-task.spawn(function()
-    while true do
-        task.wait(300) -- Every 5 minutes
-        logBotStatus("Bot is still running - Active")
+-- ===== ALTERNATIVE CHAT MONITOR (MORE RELIABLE) =====
+local function monitorChatSimple()
+    -- Check every second for new chat messages
+    local lastMessageCount = 0
+    
+    task.spawn(function()
+        while true do
+            pcall(function()
+                local chatLog = player.PlayerGui:FindFirstChild("Chat")
+                if chatLog then
+                    local messages = chatLog:FindFirstChild("ChatLog")
+                    if messages then
+                        local currentCount = #messages:GetChildren()
+                        if currentCount > lastMessageCount then
+                            -- New message detected
+                            for i = lastMessageCount + 1, currentCount do
+                                local msg = messages:GetChildren()[i]
+                                if msg and msg:IsA("TextLabel") then
+                                    local text = msg.Text
+                                    if text and text:lower():find("!hello") then
+                                        local username = text:match("^(.-):")
+                                        if username then
+                                            username = username:gsub("%s+", "")
+                                            sendToDiscord("💬 !hello detected from: " .. username, 5814783)
+                                            sendTradeRequest(username)
+                                        end
+                                    end
+                                end
+                            end
+                            lastMessageCount = currentCount
+                        end
+                    end
+                end
+            end)
+            task.wait(1)
+        end
+    end)
+end
+
+-- ===== CREATE MINIMAL GUI (STATUS ONLY) =====
+local function createStatusGUI()
+    local screenGui = Instance.new("ScreenGui")
+    screenGui.Name = "TradeBotStatus"
+    screenGui.ResetOnSpawn = false
+    
+    -- Try to parent
+    local success = pcall(function()
+        screenGui.Parent = player.PlayerGui
+    end)
+    
+    if not success then
+        pcall(function()
+            screenGui.Parent = game:GetService("CoreGui")
+        end)
     end
-end)
+    
+    -- Small status frame
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(0, 200, 0, 80)
+    frame.Position = UDim2.new(1, -210, 0, 10)
+    frame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    frame.BackgroundTransparency = 0.3
+    frame.BorderSizePixel = 2
+    frame.BorderColor3 = Color3.fromRGB(0, 255, 0)
+    frame.Parent = screenGui
+    
+    local title = Instance.new("TextLabel")
+    title.Size = UDim2.new(1, 0, 0, 25)
+    title.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+    title.Text = "🤖 Trade Bot"
+    title.TextColor3 = Color3.fromRGB(255, 255, 255)
+    title.TextSize = 12
+    title.Font = Enum.Font.GothamBold
+    title.Parent = frame
+    
+    local status = Instance.new("TextLabel")
+    status.Size = UDim2.new(1, -10, 0, 20)
+    status.Position = UDim2.new(0, 5, 0, 28)
+    status.BackgroundTransparency = 1
+    status.Text = "✅ Listening for !hello"
+    status.TextColor3 = Color3.fromRGB(0, 255, 0)
+    status.TextSize = 10
+    status.Font = Enum.Font.Gotham
+    status.Parent = frame
+    
+    local tradeCount = Instance.new("TextLabel")
+    tradeCount.Size = UDim2.new(1, -10, 0, 20)
+    tradeCount.Position = UDim2.new(0, 5, 0, 50)
+    tradeCount.BackgroundTransparency = 1
+    tradeCount.Text = "📊 Trades: 0"
+    tradeCount.TextColor3 = Color3.fromRGB(255, 255, 255)
+    tradeCount.TextSize = 10
+    tradeCount.Font = Enum.Font.Gotham
+    tradeCount.Parent = frame
+    
+    return status, tradeCount
+end
 
--- Auto-accept monitor
+-- ===== MAIN EXECUTION =====
+print("========================================")
+print("🤖 MM2 TABLET TRADE BOT")
+print("========================================")
+
+-- Force tablet UI
+forceTabletUI()
+sendToDiscord("🟢 Bot Online - Tablet Mode Active", 65280)
+
+-- Create status GUI
+local statusLabel, tradeCounterLabel = createStatusGUI()
+
+-- Start auto-accept loop
+local tradeCounter = 0
 task.spawn(function()
     while true do
         task.wait(1)
-        monitorAutoAccept()
+        autoAcceptTrades()
+        
+        -- Update GUI counter
+        pcall(function()
+            tradeCounterLabel.Text = "📊 Trades: " .. tradeCounter
+        end)
     end
 end)
 
-print("✅ Discord Logger Active!")
-print("📡 Monitoring bot activity...")
+-- Start chat monitor
+monitorChatSimple()
+
+-- Send startup message
+task.wait(3)
+pcall(function()
+    chatService:Chat(player.Character.Head, "Bot is online! Say !hello to trade", Enum.ChatColor.Green)
+end)
+
+sendToDiscord("✅ Bot initialized - Listening for !hello commands", 65280)
+
+print("✅ Bot Running!")
+print("💬 Say '!hello' in chat to trade with the bot")
+print("📱 Tablet UI Mode Active")
+print("========================================")
+
+-- Keep script running
+while true do
+    task.wait(10)
+end
