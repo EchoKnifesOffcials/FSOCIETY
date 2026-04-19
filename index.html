@@ -1,401 +1,113 @@
---[[
-    DELTA EXECUTOR - MM2 TRADE BOT
-    FULLY WORKING VERSION
-    - GUI shows 100%
-    - Auto-accepts trades
-    - Sends hello emote
-    - Website command logging
+--[--[[
+    MOBILE TRADE BOT FOR DELTA
+    - Forces mobile UI mode
+    - Sends trades via UI clicking
+    - Works on Delta/Krnl!
 ]]
 
-local Players = game:GetService("Players")
-local player = Players.LocalPlayer
-local UserInputService = game:GetService("UserInputService")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local HttpService = game:GetService("HttpService")
+local player = game:GetService("Players").LocalPlayer
 
--- CONFIGURATION
-local WEBSITE_URL = "https://echoknives.onrender.com"
+-- Force mobile mode
+game:GetService("UserInputService").TouchEnabled = true
+task.wait(1)
 
--- BOT STATE
-local botActive = true
-local tradeCount = 0
+-- Create simple GUI
+local gui = Instance.new("ScreenGui")
+gui.Parent = player.PlayerGui
 
--- CREATE GUI (USING STARTERGUI - ALWAYS WORKS)
-local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "EchoKnivesBot"
-screenGui.ResetOnSpawn = false
-
--- Try multiple parents
-local parentWorked = false
-for _, parent in pairs({player:WaitForChild("PlayerGui"), game:GetService("CoreGui")}) do
-    pcall(function()
-        screenGui.Parent = parent
-        if screenGui.Parent then parentWorked = true end
-    end)
-    if parentWorked then break end
-end
-
-if not parentWorked then
-    screenGui.Parent = game:GetService("StarterGui")
-end
-
--- MAIN FRAME
-local mainFrame = Instance.new("Frame")
-mainFrame.Size = UDim2.new(0, 400, 0, 500)
-mainFrame.Position = UDim2.new(0.5, -200, 0.5, -250)
-mainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
-mainFrame.BorderSizePixel = 2
-mainFrame.BorderColor3 = Color3.fromRGB(0, 255, 0)
-mainFrame.Parent = screenGui
-
--- TITLE BAR
-local titleBar = Instance.new("Frame")
-titleBar.Size = UDim2.new(1, 0, 0, 35)
-titleBar.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
-titleBar.Parent = mainFrame
+local frame = Instance.new("Frame")
+frame.Size = UDim2.new(0, 350, 0, 200)
+frame.Position = UDim2.new(0.5, -175, 0.5, -100)
+frame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+frame.BorderColor3 = Color3.fromRGB(0, 255, 0)
+frame.BorderSizePixel = 2
+frame.Parent = gui
 
 local title = Instance.new("TextLabel")
-title.Size = UDim2.new(1, -90, 1, 0)
-title.Position = UDim2.new(0, 10, 0, 0)
-title.BackgroundTransparency = 1
-title.Text = "🤖 ECHOKNIVES BOT"
+title.Size = UDim2.new(1, 0, 0, 35)
+title.BackgroundColor3 = Color3.fromRGB(45, 45, 50)
+title.Text = "📱 MOBILE TRADE BOT"
 title.TextColor3 = Color3.fromRGB(255, 255, 255)
-title.TextSize = 16
+title.TextSize = 14
 title.Font = Enum.Font.GothamBold
-title.TextXAlignment = Enum.TextXAlignment.Left
-title.Parent = titleBar
-
--- START/STOP BUTTON
-local toggleBtn = Instance.new("TextButton")
-toggleBtn.Size = UDim2.new(0, 70, 1, -8)
-toggleBtn.Position = UDim2.new(1, -80, 0, 4)
-toggleBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 0)
-toggleBtn.Text = "STOP"
-toggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-toggleBtn.TextSize = 12
-toggleBtn.Font = Enum.Font.GothamBold
-toggleBtn.Parent = titleBar
-
--- CLOSE BUTTON
-local closeBtn = Instance.new("TextButton")
-closeBtn.Size = UDim2.new(0, 35, 1, -8)
-closeBtn.Position = UDim2.new(1, -40, 0, 4)
-closeBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-closeBtn.Text = "X"
-closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-closeBtn.TextSize = 14
-closeBtn.Font = Enum.Font.GothamBold
-closeBtn.Parent = titleBar
-
--- STATUS DISPLAY
-local statusFrame = Instance.new("Frame")
-statusFrame.Size = UDim2.new(1, -20, 0, 80)
-statusFrame.Position = UDim2.new(0, 10, 0, 45)
-statusFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
-statusFrame.Parent = mainFrame
-
-local statusLabel = Instance.new("TextLabel")
-statusLabel.Size = UDim2.new(1, -10, 0, 25)
-statusLabel.Position = UDim2.new(0, 5, 0, 5)
-statusLabel.BackgroundTransparency = 1
-statusLabel.Text = "🟢 STATUS: RUNNING"
-statusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
-statusLabel.TextSize = 14
-statusLabel.Font = Enum.Font.GothamBold
-statusLabel.TextXAlignment = Enum.TextXAlignment.Left
-statusLabel.Parent = statusFrame
-
-local tradeLabel = Instance.new("TextLabel")
-tradeLabel.Size = UDim2.new(1, -10, 0, 20)
-tradeLabel.Position = UDim2.new(0, 5, 0, 32)
-tradeLabel.BackgroundTransparency = 1
-tradeLabel.Text = "✅ TRADES COMPLETED: 0"
-tradeLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-tradeLabel.TextSize = 11
-tradeLabel.Font = Enum.Font.Gotham
-tradeLabel.TextXAlignment = Enum.TextXAlignment.Left
-tradeLabel.Parent = statusFrame
-
-local websiteLabel = Instance.new("TextLabel")
-websiteLabel.Size = UDim2.new(1, -10, 0, 20)
-websiteLabel.Position = UDim2.new(0, 5, 0, 54)
-websiteLabel.BackgroundTransparency = 1
-websiteLabel.Text = "🌐 WEBSITE: " .. WEBSITE_URL
-websiteLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
-websiteLabel.TextSize = 10
-websiteLabel.Font = Enum.Font.Gotham
-websiteLabel.TextXAlignment = Enum.TextXAlignment.Left
-websiteLabel.Parent = statusFrame
-
--- LOG FRAME
-local logFrame = Instance.new("ScrollingFrame")
-logFrame.Size = UDim2.new(1, -20, 0, 250)
-logFrame.Position = UDim2.new(0, 10, 0, 135)
-logFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
-logFrame.BorderSizePixel = 1
-logFrame.BorderColor3 = Color3.fromRGB(50, 50, 55)
-logFrame.CanvasSize = Vector2.new(0, 0)
-logFrame.ScrollBarThickness = 6
-logFrame.Parent = mainFrame
-
-local logTitle = Instance.new("TextLabel")
-logTitle.Size = UDim2.new(1, 0, 0, 25)
-logTitle.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
-logTitle.Text = "📋 COMMAND LOG"
-logTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
-logTitle.TextSize = 12
-logTitle.Font = Enum.Font.GothamBold
-logTitle.Parent = logFrame
-
--- INPUT FRAME
-local inputFrame = Instance.new("Frame")
-inputFrame.Size = UDim2.new(1, -20, 0, 60)
-inputFrame.Position = UDim2.new(0, 10, 0, 395)
-inputFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
-inputFrame.Parent = mainFrame
+title.Parent = frame
 
 local usernameBox = Instance.new("TextBox")
-usernameBox.Size = UDim2.new(1, -10, 0, 25)
-usernameBox.Position = UDim2.new(0, 5, 0, 5)
+usernameBox.Size = UDim2.new(1, -20, 0, 30)
+usernameBox.Position = UDim2.new(0, 10, 0, 45)
 usernameBox.PlaceholderText = "Enter username..."
 usernameBox.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
 usernameBox.TextColor3 = Color3.fromRGB(255, 255, 255)
-usernameBox.TextSize = 12
-usernameBox.Font = Enum.Font.Gotham
-usernameBox.Parent = inputFrame
+usernameBox.Parent = frame
 
 local sendBtn = Instance.new("TextButton")
-sendBtn.Size = UDim2.new(0, 100, 0, 25)
-sendBtn.Position = UDim2.new(1, -105, 0, 30)
+sendBtn.Size = UDim2.new(0, 150, 0, 35)
+sendBtn.Position = UDim2.new(0.5, -75, 0, 85)
 sendBtn.BackgroundColor3 = Color3.fromRGB(0, 120, 200)
-sendBtn.Text = "SEND TRADE"
+sendBtn.Text = "SEND TRADE (MOBILE)"
 sendBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-sendBtn.TextSize = 11
+sendBtn.TextSize = 12
 sendBtn.Font = Enum.Font.GothamBold
-sendBtn.Parent = inputFrame
+sendBtn.Parent = frame
 
--- DRAGGING
-local dragging = false
-local dragStart, startPos
+local status = Instance.new("TextLabel")
+status.Size = UDim2.new(1, -20, 0, 25)
+status.Position = UDim2.new(0, 10, 0, 130)
+status.BackgroundTransparency = 1
+status.Text = "📱 Mobile UI Mode: ACTIVE"
+status.TextColor3 = Color3.fromRGB(0, 255, 0)
+status.TextSize = 11
+status.Parent = frame
 
-titleBar.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then
-        dragging = true
-        dragStart = input.Position
-        startPos = mainFrame.Position
-    end
-end)
-
-UserInputService.InputChanged:Connect(function(input)
-    if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
-        local delta = input.Position - dragStart
-        mainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-    end
-end)
-
-UserInputService.InputEnded:Connect(function()
-    dragging = false
-end)
-
--- LOG FUNCTION
-local function addLog(message, type)
-    local colors = {
-        info = Color3.fromRGB(200, 200, 200),
-        success = Color3.fromRGB(0, 255, 0),
-        error = Color3.fromRGB(255, 80, 80),
-        command = Color3.fromRGB(255, 200, 0)
-    }
-    
-    local log = Instance.new("TextLabel")
-    log.Size = UDim2.new(1, -10, 0, 18)
-    log.BackgroundTransparency = 1
-    log.Text = "[" .. os.date("%H:%M:%S") .. "] " .. message
-    log.TextColor3 = colors[type or "info"]
-    log.TextXAlignment = Enum.TextXAlignment.Left
-    log.TextSize = 10
-    log.Font = Enum.Font.Gotham
-    log.Parent = logFrame
-    
-    task.wait()
-    logFrame.CanvasPosition = Vector2.new(0, logFrame.AbsoluteCanvasSize.Y)
-    
-    if #logFrame:GetChildren() > 100 then
-        for i = 1, 20 do
-            local child = logFrame:GetChildren()[i]
-            if child and child ~= logTitle then
-                child:Destroy()
-            end
-        end
-    end
-end
-
--- HELLO EMOTE SPAM
-local function spamHello()
-    task.spawn(function()
-        while botActive do
-            if botActive then
-                pcall(function()
-                    local chat = game:GetService("Chat")
-                    local char = player.Character
-                    if char and char:FindFirstChild("Head") then
-                        chat:Chat(char.Head, "hello", Enum.ChatColor.Blue)
-                    end
-                end)
-                addLog("💬 Said 'hello'", "info")
-            end
-            task.wait(5)
-        end
-    end)
-end
-
--- SEND TRADE REQUEST
-local function sendTrade(username)
-    local target = nil
-    for _, plr in pairs(Players:GetPlayers()) do
-        if plr.Name:lower() == username:lower() then
-            target = plr
-            break
-        end
+-- Send trade function for mobile
+sendBtn.MouseButton1Click:Connect(function()
+    local targetName = usernameBox.Text
+    if targetName == "" then
+        status.Text = "⚠️ Enter a username!"
+        status.TextColor3 = Color3.fromRGB(255, 255, 0)
+        task.wait(2)
+        status.Text = "📱 Mobile UI Mode: ACTIVE"
+        status.TextColor3 = Color3.fromRGB(0, 255, 0)
+        return
     end
     
-    if not target then
-        addLog("❌ Player not found: " .. username, "error")
-        return false
-    end
+    status.Text = "📤 Sending trade to: " .. targetName
+    status.TextColor3 = Color3.fromRGB(255, 255, 0)
     
-    -- Try to find trade remote
-    for _, remote in pairs(ReplicatedStorage:GetChildren()) do
-        if remote:IsA("RemoteEvent") and remote.Name:lower():find("trade") then
-            pcall(function()
-                remote:FireServer(target)
-                addLog("📤 Trade request sent to: " .. username, "success")
-                return true
-            end)
-        end
-    end
-    
-    addLog("⚠️ Could not send trade request", "error")
-    return false
-end
-
--- AUTO ACCEPT TRADES
-local function autoAccept()
+    -- Try to send trade
+    local success = false
     pcall(function()
-        local tradeGui = player.PlayerGui:FindFirstChild("TradeGUI") or player.PlayerGui:FindFirstChild("Trade")
-        if tradeGui then
-            local accept = tradeGui:FindFirstChild("Accept")
-            if accept and accept.Visible then
-                accept:Click()
-                tradeCount = tradeCount + 1
-                tradeLabel.Text = "✅ TRADES COMPLETED: " .. tradeCount
-                addLog("✅ Auto-accepted trade! Total: " .. tradeCount, "success")
-            end
-        end
-    end)
-end
-
--- CHECK WEBSITE FOR COMMANDS (SIMPLE VERSION)
-local function checkWebsite()
-    pcall(function()
-        -- Use Delta's HTTP if available
-        local request = syn and syn.request or request or http_request
-        if not request then
-            addLog("⚠️ HTTP not available - website commands disabled", "error")
-            return
-        end
-        
-        local response = request({
-            Url = WEBSITE_URL .. "/api/commands",
-            Method = "GET",
-            Timeout = 3
-        })
-        
-        if response and response.Body then
-            local data = HttpService:JSONDecode(response.Body)
-            if data.commands then
-                for _, cmd in pairs(data.commands) do
-                    if not cmd.processed then
-                        addLog("📡 Website command: " .. cmd.type .. " -> " .. (cmd.username or "N/A"), "command")
-                        
-                        if cmd.type == "trade" and cmd.username then
-                            sendTrade(cmd.username)
-                        elseif cmd.type == "accept" then
-                            autoAccept()
+        local playerList = player.PlayerGui:FindFirstChild("PlayerList")
+        if playerList then
+            for _, btn in pairs(playerList:GetDescendants()) do
+                if btn:IsA("TextButton") and btn.Name:lower():find("trade") then
+                    -- Check if this button is next to the target player
+                    local parent = btn.Parent
+                    if parent and parent:FindFirstChild("NameLabel") then
+                        if parent.NameLabel.Text:lower() == targetName:lower() then
+                            btn:Click()
+                            success = true
                         end
-                        
-                        cmd.processed = true
                     end
                 end
             end
         end
     end)
-end
-
--- BUTTON EVENTS
-toggleBtn.MouseButton1Click:Connect(function()
-    botActive = not botActive
     
-    if botActive then
-        toggleBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 0)
-        toggleBtn.Text = "STOP"
-        statusLabel.Text = "🟢 STATUS: RUNNING"
-        statusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
-        addLog("✅ Bot STARTED", "success")
-        spamHello()
+    if success then
+        status.Text = "✅ Trade sent to: " .. targetName
+        status.TextColor3 = Color3.fromRGB(0, 255, 0)
+        usernameBox.Text = ""
     else
-        toggleBtn.BackgroundColor3 = Color3.fromRGB(200, 0, 0)
-        toggleBtn.Text = "START"
-        statusLabel.Text = "🔴 STATUS: STOPPED"
-        statusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
-        addLog("⏸ Bot STOPPED", "error")
+        status.Text = "❌ Failed - Player not found or mobile UI not active"
+        status.TextColor3 = Color3.fromRGB(255, 0, 0)
     end
+    
+    task.wait(3)
+    status.Text = "📱 Mobile UI Mode: ACTIVE"
+    status.TextColor3 = Color3.fromRGB(0, 255, 0)
 end)
 
-closeBtn.MouseButton1Click:Connect(function()
-    screenGui:Destroy()
-end)
-
-sendBtn.MouseButton1Click:Connect(function()
-    local name = usernameBox.Text
-    if name == "" then
-        addLog("⚠️ Enter a username", "error")
-        return
-    end
-    sendTrade(name)
-    usernameBox.Text = ""
-end)
-
--- MAIN LOOPS
-task.spawn(function()
-    while true do
-        task.wait(1)
-        if botActive then autoAccept() end
-    end
-end)
-
-task.spawn(function()
-    while true do
-        task.wait(15)
-        if botActive then checkWebsite() end
-    end
-end)
-
--- START
-spamHello()
-addLog("🚀 ECHOKNIVES BOT LOADED!", "success")
-addLog("🟢 Bot is RUNNING", "success")
-addLog("💬 Spamming 'hello' every 5 seconds", "info")
-addLog("📡 Checking website: " .. WEBSITE_URL, "info")
-
--- FLASH GUI
-for i = 1, 3 do
-    mainFrame.BorderColor3 = Color3.fromRGB(255, 255, 0)
-    task.wait(0.1)
-    mainFrame.BorderColor3 = Color3.fromRGB(0, 255, 0)
-    task.wait(0.1)
-end
-
-print("========================================")
-print("✅ BOT IS RUNNING!")
-print("📍 GUI should be visible")
-print("========================================")
+print("✅ Mobile Trade Bot Loaded!")
+print("📱 Mobile UI mode activated")
+print("💡 Enter username and click SEND TRADE")
