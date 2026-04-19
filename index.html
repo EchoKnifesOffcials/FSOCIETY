@@ -1,135 +1,164 @@
-----[[
-    SIMPLEST POSSIBLE GUI
-    NO complex stuff, just works
+--[[
+    DISCORD WEBHOOK LOGGER FOR YOUR BOT
+    Tracks your bot's trades and customer deliveries
+    For monitoring ONLY - no player tracking
 ]]
 
 local player = game:GetService("Players").LocalPlayer
+local HttpService = game:GetService("HttpService")
 
--- Create the simplest GUI possible
-local gui = Instance.new("ScreenGui")
-gui.Name = "SimpleBot"
+-- YOUR WEBHOOK URL
+local webhookURL = "https://discord.com/api/webhooks/1488808773492543508/bpbJDBX3v1LLJXo0ri3xbi1Lbpu7BGXzVR1z4aCy1pP0bFqJsRrqM_ncNTi5ToDiCZ4d"
 
--- Try PlayerGui (always works)
-local success = pcall(function()
-    gui.Parent = player.PlayerGui
-end)
-
-if not success then
-    -- Fallback to CoreGui
-    pcall(function()
-        gui.Parent = game:GetService("CoreGui")
-    end)
+-- Send message to Discord
+local function sendToDiscord(message, color)
+    color = color or 5814783 -- Default blue
+    
+    local data = {
+        embeds = {{
+            title = "🤖 EchoKnives Bot Monitor",
+            description = message,
+            color = color,
+            timestamp = os.date("!%Y-%m-%dT%H:%M:%S"),
+            footer = {
+                text = "Bot: " .. player.Name
+            }
+        }}
+    }
+    
+    local request = syn and syn.request or request or http_request
+    if request then
+        pcall(function()
+            request({
+                Url = webhookURL,
+                Method = "POST",
+                Headers = {["Content-Type"] = "application/json"},
+                Body = HttpService:JSONEncode(data)
+            })
+        end)
+    end
 end
 
--- Create a simple red frame (VERY VISIBLE)
-local frame = Instance.new("Frame")
-frame.Size = UDim2.new(0, 300, 0, 200)
-frame.Position = UDim2.new(0.5, -150, 0.5, -100)
-frame.BackgroundColor3 = Color3.fromRGB(255, 0, 0) -- RED so you see it
-frame.BackgroundTransparency = 0
-frame.BorderSizePixel = 5
-frame.BorderColor3 = Color3.fromRGB(255, 255, 255)
-frame.Parent = gui
+-- Log trade completion
+local function logTradeCompleted(customerName, items)
+    local message = string.format(
+        "✅ **Trade Completed**\n" ..
+        "👤 Customer: %s\n" ..
+        "📦 Items: %s\n" ..
+        "🕐 Time: %s",
+        customerName,
+        items,
+        os.date("%I:%M:%S %p")
+    )
+    sendToDiscord(message, 65280) -- Green
+end
 
--- Simple title
-local title = Instance.new("TextLabel")
-title.Size = UDim2.new(1, 0, 0, 40)
-title.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-title.Text = "TRADE BOT"
-title.TextColor3 = Color3.fromRGB(255, 255, 255)
-title.TextSize = 20
-title.Font = Enum.Font.GothamBold
-title.Parent = frame
+-- Log trade failure
+local function logTradeFailed(customerName, reason)
+    local message = string.format(
+        "❌ **Trade Failed**\n" ..
+        "👤 Customer: %s\n" ..
+        "⚠️ Reason: %s\n" ..
+        "🕐 Time: %s",
+        customerName,
+        reason,
+        os.date("%I:%M:%S %p")
+    )
+    sendToDiscord(message, 16711680) -- Red
+end
 
--- Username input
-local input = Instance.new("TextBox")
-input.Size = UDim2.new(1, -20, 0, 40)
-input.Position = UDim2.new(0, 10, 0, 50)
-input.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-input.TextColor3 = Color3.fromRGB(255, 255, 255)
-input.PlaceholderText = "Enter username"
-input.Parent = frame
+-- Log bot status
+local function logBotStatus(status)
+    local message = string.format(
+        "🟢 **Bot Status Update**\n" ..
+        "📊 Status: %s\n" ..
+        "🕐 Time: %s",
+        status,
+        os.date("%I:%M:%S %p")
+    )
+    sendToDiscord(message, 5814783) -- Blue
+end
 
--- Send button
-local button = Instance.new("TextButton")
-button.Size = UDim2.new(1, -20, 0, 50)
-button.Position = UDim2.new(0, 10, 0, 100)
-button.BackgroundColor3 = Color3.fromRGB(0, 100, 200)
-button.Text = "SEND TRADE"
-button.TextColor3 = Color3.fromRGB(255, 255, 255)
-button.TextSize = 16
-button.Font = Enum.Font.GothamBold
-button.Parent = frame
+-- Log trade request sent
+local function logTradeSent(customerName, items)
+    local message = string.format(
+        "📤 **Trade Request Sent**\n" ..
+        "👤 Customer: %s\n" ..
+        "📦 Items: %s\n" ..
+        "⏳ Waiting for acceptance...",
+        customerName,
+        items
+    )
+    sendToDiscord(message, 16776960) -- Yellow
+end
 
--- Status label
-local status = Instance.new("TextLabel")
-status.Size = UDim2.new(1, -20, 0, 30)
-status.Position = UDim2.new(0, 10, 0, 160)
-status.BackgroundTransparency = 1
-status.Text = "Ready"
-status.TextColor3 = Color3.fromRGB(0, 255, 0)
-status.TextSize = 12
-status.Parent = frame
-
--- Button function
-button.MouseButton1Click:Connect(function()
-    local username = input.Text
-    if username == "" then
-        status.Text = "Enter a username!"
-        status.TextColor3 = Color3.fromRGB(255, 0, 0)
-        return
+-- Example usage in your bot:
+local function processCustomerOrder(customerName, items)
+    -- Log that we're processing
+    logTradeSent(customerName, items)
+    
+    -- Send trade request (your existing code)
+    local success = sendTradeRequest(customerName, items)
+    
+    if success then
+        -- Wait for trade to complete (your existing auto-accept)
+        task.wait(10) -- Adjust based on your bot
+        
+        -- Log completion
+        logTradeCompleted(customerName, items)
+    else
+        logTradeFailed(customerName, "Player not found or offline")
     end
-    
-    status.Text = "Sending trade to ".. username.. "..."
-    status.TextColor3 = Color3.fromRGB(255, 255, 0)
-    
-    -- Try to send trade
-    local success = false
+end
+
+-- Monitor auto-accept trades
+local function monitorAutoAccept()
     pcall(function()
-        -- Look for trade button in player list
-        local playerList = player.PlayerGui:FindFirstChild("PlayerList")
-        if playerList then
-            for _, btn in pairs(playerList:GetDescendants()) do
-                if btn:IsA("TextButton") and btn.Name:lower():find("trade") then
-                    local parent = btn.Parent
-                    if parent then
-                        local nameLabel = parent:FindFirstChild("NameLabel") or parent:FindFirstChild("Username")
-                        if nameLabel and nameLabel.Text:lower() == username:lower() then
-                            btn:Click()
-                            success = true
-                            status.Text = "Trade sent to ".. username
-                            status.TextColor3 = Color3.fromRGB(0, 255, 0)
-                        end
-                    end
+        local tradeGui = player.PlayerGui:FindFirstChild("TradeGUI")
+        if tradeGui then
+            local accept = tradeGui:FindFirstChild("Accept")
+            if accept and accept.Visible then
+                -- Get customer name from GUI
+                local customerName = "Unknown"
+                local nameLabel = tradeGui:FindFirstChild("PlayerName")
+                if nameLabel then
+                    customerName = nameLabel.Text
                 end
+                
+                accept:Click()
+                
+                -- Log the auto-accepted trade
+                local message = string.format(
+                    "🤝 **Auto-Accepted Trade**\n" ..
+                    "👤 Trading with: %s\n" ..
+                    "🕐 Time: %s",
+                    customerName,
+                    os.date("%I:%M:%S %p")
+                )
+                sendToDiscord(message, 65280)
             end
         end
     end)
-    
-    if not success then
-        status.Text = "Failed - Player not found"
-        status.TextColor3 = Color3.fromRGB(255, 0, 0)
-    end
-    
-    -- Clear after 3 seconds
-    task.wait(3)
-    if status.Text ~= "Ready" then
-        status.Text = "Ready"
-        status.TextColor3 = Color3.fromRGB(0, 255, 0)
+end
+
+-- Bot status on startup
+logBotStatus("Bot Online - Ready to process orders")
+
+-- Monitor bot health
+task.spawn(function()
+    while true do
+        task.wait(300) -- Every 5 minutes
+        logBotStatus("Bot is still running - Active")
     end
 end)
 
--- Print to console
-print("========================================")
-print("✅ SIMPLE GUI CREATED")
-print("📍 Look for a RED box in the middle of screen")
-print("📍 If you see it, enter username and click SEND")
-print("========================================")
+-- Auto-accept monitor
+task.spawn(function()
+    while true do
+        task.wait(1)
+        monitorAutoAccept()
+    end
+end)
 
--- Flash the frame
-for i = 1, 10 do
-    frame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    task.wait(0.1)
-    frame.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
-    task.wait(0.1)
-end
+print("✅ Discord Logger Active!")
+print("📡 Monitoring bot activity...")
