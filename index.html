@@ -1,86 +1,163 @@
 --[[
-    MM2 AUTO TRADE BOT - INTEGRATED WITH echoknives.onrender.com
-    Features:
-    - Start/Stop button with emote spam (hello emote)
-    - Auto-accepts trades
-    - Website integration for orders
-    - Manual trade sending
+    DELTA/ALL EXECUTORS - MM2 TRADE BOT
+    Uses PlayerGui instead of CoreGui (ALWAYS works)
 ]]
-
-local WebsiteURL = "https://echoknives.onrender.com" -- Your website
 
 -- Services
 local Players = game:GetService("Players")
-local HttpService = game:GetService("HttpService")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local UserInputService = game:GetService("UserInputService")
-local CoreGui = game:GetService("CoreGui")
-local Chat = game:GetService("Chat")
-
 local player = Players.LocalPlayer
-local tradeInventory = {}
-local tradeCount = 0
-local isProcessing = false
-local botActive = true -- Bot active state
-local emoteSpamActive = true -- Emote spam state
+local UserInputService = game:GetService("UserInputService")
 
--- Emote spam function
-local function spamHelloEmote()
-    task.spawn(function()
-        while emoteSpamActive do
-            if botActive then
-                -- Method 1: Send chat message "hello"
-                pcall(function()
-                    Chat:Chat(player.Character.Head, "hello", Enum.ChatColor.Blue)
-                end)
-                
-                -- Method 2: Play hello emote if available
-                pcall(function()
-                    local emotes = player.Character:FindFirstChild("Emotes")
-                    if emotes then
-                        local helloEmote = emotes:FindFirstChild("hello")
-                        if helloEmote and helloEmote:IsA("Animation") then
-                            local humanoid = player.Character:FindFirstChild("Humanoid")
-                            if humanoid then
-                                local animTrack = humanoid:LoadAnimation(helloEmote)
-                                animTrack:Play()
-                            end
-                        end
-                    end
-                end)
-                
-                -- Method 3: Use remote for emote if available
-                pcall(function()
-                    local emoteRemote = ReplicatedStorage:FindFirstChild("Emote")
-                    if emoteRemote and emoteRemote:IsA("RemoteEvent") then
-                        emoteRemote:FireServer("hello")
-                    end
-                end)
-            end
-            task.wait(3) -- Spam every 3 seconds
-        end
-    end)
-end
+-- Wait for PlayerGui to exist
+repeat task.wait() until player:FindFirstChild("PlayerGui")
 
--- Create GUI
+-- Create GUI on PlayerGui (THIS ALWAYS WORKS)
 local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "MM2TradeBot"
+screenGui.Name = "TradeBot"
 screenGui.ResetOnSpawn = false
-screenGui.Parent = CoreGui
+screenGui.Parent = player.PlayerGui  -- NOT CoreGui!
 
 -- Main Frame
 local mainFrame = Instance.new("Frame")
-mainFrame.Size = UDim2.new(0, 480, 0, 620)
-mainFrame.Position = UDim2.new(0.5, -240, 0.5, -310)
+mainFrame.Size = UDim2.new(0, 420, 0, 520)
+mainFrame.Position = UDim2.new(0.5, -210, 0.5, -260)
 mainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
-mainFrame.BorderSizePixel = 0
+mainFrame.BackgroundTransparency = 0
+mainFrame.BorderSizePixel = 2
+mainFrame.BorderColor3 = Color3.fromRGB(0, 255, 0)
+mainFrame.Active = true
+mainFrame.Draggable = false
 mainFrame.Parent = screenGui
 
--- Make draggable
+-- Title Bar (for dragging)
+local titleBar = Instance.new("Frame")
+titleBar.Size = UDim2.new(1, 0, 0, 35)
+titleBar.BackgroundColor3 = Color3.fromRGB(45, 45, 50)
+titleBar.BorderSizePixel = 0
+titleBar.Parent = mainFrame
+
+local titleText = Instance.new("TextLabel")
+titleText.Size = UDim2.new(1, -80, 1, 0)
+titleText.Position = UDim2.new(0, 10, 0, 0)
+titleText.BackgroundTransparency = 1
+titleText.Text = "🤖 MM2 TRADE BOT"
+titleText.TextColor3 = Color3.fromRGB(255, 255, 255)
+titleText.TextSize = 18
+titleText.Font = Enum.Font.GothamBold
+titleText.TextXAlignment = Enum.TextXAlignment.Left
+titleText.Parent = titleBar
+
+-- Start/Stop Button
+local toggleBtn = Instance.new("TextButton")
+toggleBtn.Size = UDim2.new(0, 70, 1, -8)
+toggleBtn.Position = UDim2.new(1, -80, 0, 4)
+toggleBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 0)
+toggleBtn.Text = "START"
+toggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+toggleBtn.TextSize = 14
+toggleBtn.Font = Enum.Font.GothamBold
+toggleBtn.Parent = titleBar
+
+-- Close Button
+local closeBtn = Instance.new("TextButton")
+closeBtn.Size = UDim2.new(0, 35, 1, -8)
+closeBtn.Position = UDim2.new(1, -40, 0, 4)
+closeBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+closeBtn.Text = "X"
+closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+closeBtn.TextSize = 16
+closeBtn.Font = Enum.Font.GothamBold
+closeBtn.Parent = titleBar
+
+-- Status Display
+local statusLabel = Instance.new("TextLabel")
+statusLabel.Size = UDim2.new(1, -20, 0, 35)
+statusLabel.Position = UDim2.new(0, 10, 0, 45)
+statusLabel.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
+statusLabel.Text = "🟢 STATUS: RUNNING"
+statusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
+statusLabel.TextSize = 16
+statusLabel.Font = Enum.Font.GothamBold
+statusLabel.Parent = mainFrame
+
+-- Emote Status
+local emoteStatus = Instance.new("TextLabel")
+emoteStatus.Size = UDim2.new(1, -20, 0, 25)
+emoteStatus.Position = UDim2.new(0, 10, 0, 85)
+emoteStatus.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
+emoteStatus.Text = "💬 HELLO EMOTE: ACTIVE (every 5s)"
+emoteStatus.TextColor3 = Color3.fromRGB(100, 255, 100)
+emoteStatus.TextSize = 12
+emoteStatus.Font = Enum.Font.Gotham
+emoteStatus.Parent = mainFrame
+
+-- Trade Counter
+local tradeCounter = Instance.new("TextLabel")
+tradeCounter.Size = UDim2.new(1, -20, 0, 25)
+tradeCounter.Position = UDim2.new(0, 10, 0, 115)
+tradeCounter.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
+tradeCounter.Text = "✅ COMPLETED TRADES: 0"
+tradeCounter.TextColor3 = Color3.fromRGB(255, 255, 255)
+tradeCounter.TextSize = 12
+tradeCounter.Font = Enum.Font.Gotham
+tradeCounter.Parent = mainFrame
+
+-- Log Frame
+local logFrame = Instance.new("ScrollingFrame")
+logFrame.Size = UDim2.new(1, -20, 0, 240)
+logFrame.Position = UDim2.new(0, 10, 0, 150)
+logFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
+logFrame.BorderSizePixel = 1
+logFrame.BorderColor3 = Color3.fromRGB(50, 50, 55)
+logFrame.CanvasSize = Vector2.new(0, 0)
+logFrame.ScrollBarThickness = 6
+logFrame.Parent = mainFrame
+
+local logTitle = Instance.new("TextLabel")
+logTitle.Size = UDim2.new(1, 0, 0, 25)
+logTitle.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+logTitle.Text = "📋 ACTIVITY LOG"
+logTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+logTitle.TextSize = 12
+logTitle.Font = Enum.Font.GothamBold
+logTitle.Parent = logFrame
+
+-- Input Section
+local usernameBox = Instance.new("TextBox")
+usernameBox.Size = UDim2.new(1, -20, 0, 30)
+usernameBox.Position = UDim2.new(0, 10, 0, 400)
+usernameBox.PlaceholderText = "Enter username to trade..."
+usernameBox.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
+usernameBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+usernameBox.TextSize = 12
+usernameBox.Font = Enum.Font.Gotham
+usernameBox.Parent = mainFrame
+
+local itemsBox = Instance.new("TextBox")
+itemsBox.Size = UDim2.new(1, -20, 0, 30)
+itemsBox.Position = UDim2.new(0, 10, 0, 435)
+itemsBox.PlaceholderText = "Items (comma separated)"
+itemsBox.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
+itemsBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+itemsBox.TextSize = 12
+itemsBox.Font = Enum.Font.Gotham
+itemsBox.Parent = mainFrame
+
+local sendBtn = Instance.new("TextButton")
+sendBtn.Size = UDim2.new(0, 150, 0, 35)
+sendBtn.Position = UDim2.new(0.5, -75, 0, 475)
+sendBtn.BackgroundColor3 = Color3.fromRGB(0, 120, 200)
+sendBtn.Text = "SEND TRADE REQUEST"
+sendBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+sendBtn.TextSize = 12
+sendBtn.Font = Enum.Font.GothamBold
+sendBtn.Parent = mainFrame
+
+-- Make GUI draggable (manual dragging)
 local dragging = false
 local dragStart, startPos
 
-mainFrame.InputBegan:Connect(function(input)
+titleBar.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 then
         dragging = true
         dragStart = input.Position
@@ -101,471 +178,190 @@ UserInputService.InputEnded:Connect(function(input)
     end
 end)
 
--- Title Bar
-local titleBar = Instance.new("Frame")
-titleBar.Size = UDim2.new(1, 0, 0, 45)
-titleBar.BackgroundColor3 = Color3.fromRGB(45, 45, 50)
-titleBar.BorderSizePixel = 0
-titleBar.Parent = mainFrame
+-- Bot state
+local botActive = true
+local tradeCount = 0
 
-local title = Instance.new("TextLabel")
-title.Size = UDim2.new(1, -100, 1, 0)
-title.Position = UDim2.new(0, 10, 0, 0)
-title.BackgroundTransparency = 1
-title.Text = "🤖 EchoKnives Trade Bot"
-title.TextColor3 = Color3.fromRGB(255, 255, 255)
-title.TextXAlignment = Enum.TextXAlignment.Left
-title.Font = Enum.Font.GothamBold
-title.TextSize = 18
-title.Parent = titleBar
-
--- Start/Stop Button
-local startStopBtn = Instance.new("TextButton")
-startStopBtn.Size = UDim2.new(0, 80, 1, -10)
-startStopBtn.Position = UDim2.new(1, -90, 0, 5)
-startStopBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
-startStopBtn.Text = "⏵ START"
-startStopBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-startStopBtn.TextSize = 14
-startStopBtn.Font = Enum.Font.GothamBold
-startStopBtn.Parent = titleBar
-
--- Close Button
-local closeBtn = Instance.new("TextButton")
-closeBtn.Size = UDim2.new(0, 35, 1, -10)
-closeBtn.Position = UDim2.new(1, -35, 0, 5)
-closeBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-closeBtn.Text = "X"
-closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-closeBtn.TextSize = 18
-closeBtn.Font = Enum.Font.GothamBold
-closeBtn.Parent = titleBar
-closeBtn.MouseButton1Click:Connect(function()
-    screenGui:Destroy()
-end)
-
--- Status Panel
-local statusFrame = Instance.new("Frame")
-statusFrame.Size = UDim2.new(1, -20, 0, 110)
-statusFrame.Position = UDim2.new(0, 10, 0, 55)
-statusFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
-statusFrame.BorderSizePixel = 0
-statusFrame.Parent = mainFrame
-
-local statusText = Instance.new("TextLabel")
-statusText.Size = UDim2.new(1, -10, 0, 30)
-statusText.Position = UDim2.new(0, 5, 0, 5)
-statusText.BackgroundTransparency = 1
-statusText.Text = "🟢 STATUS: RUNNING"
-statusText.TextColor3 = Color3.fromRGB(0, 255, 100)
-statusText.TextXAlignment = Enum.TextXAlignment.Left
-statusText.Font = Enum.Font.GothamBold
-statusText.TextSize = 14
-statusText.Parent = statusFrame
-
-local emoteStatusText = Instance.new("TextLabel")
-emoteStatusText.Size = UDim2.new(1, -10, 0, 25)
-emoteStatusText.Position = UDim2.new(0, 5, 0, 35)
-emoteStatusText.BackgroundTransparency = 1
-emoteStatusText.Text = "💬 EMOTE SPAM: ACTIVE (saying 'hello' every 3s)"
-emoteStatusText.TextColor3 = Color3.fromRGB(100, 255, 100)
-emoteStatusText.TextXAlignment = Enum.TextXAlignment.Left
-emoteStatusText.Font = Enum.Font.Gotham
-emoteStatusText.TextSize = 11
-emoteStatusText.Parent = statusFrame
-
-local tradesCompletedLabel = Instance.new("TextLabel")
-tradesCompletedLabel.Size = UDim2.new(1, -10, 0, 25)
-tradesCompletedLabel.Position = UDim2.new(0, 5, 0, 62)
-tradesCompletedLabel.BackgroundTransparency = 1
-tradesCompletedLabel.Text = "✅ Completed Trades: 0"
-tradesCompletedLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-tradesCompletedLabel.TextXAlignment = Enum.TextXAlignment.Left
-tradesCompletedLabel.Font = Enum.Font.Gotham
-tradesCompletedLabel.TextSize = 12
-tradesCompletedLabel.Parent = statusFrame
-
-local botNameLabel = Instance.new("TextLabel")
-botNameLabel.Size = UDim2.new(1, -10, 0, 20)
-botNameLabel.Position = UDim2.new(0, 5, 0, 88)
-botNameLabel.BackgroundTransparency = 1
-botNameLabel.Text = "🤖 Bot: " .. player.Name .. " | Website: echoknives.onrender.com"
-botNameLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
-botNameLabel.TextXAlignment = Enum.TextXAlignment.Left
-botNameLabel.Font = Enum.Font.Gotham
-botNameLabel.TextSize = 10
-botNameLabel.Parent = statusFrame
-
--- Logs Frame
-local logFrame = Instance.new("ScrollingFrame")
-logFrame.Size = UDim2.new(1, -20, 0, 300)
-logFrame.Position = UDim2.new(0, 10, 0, 175)
-logFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
-logFrame.BorderSizePixel = 0
-logFrame.CanvasSize = Vector2.new(0, 0)
-logFrame.ScrollBarThickness = 6
-logFrame.Parent = mainFrame
-
-local logsTitle = Instance.new("TextLabel")
-logsTitle.Size = UDim2.new(1, 0, 0, 30)
-logsTitle.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
-logsTitle.Text = "📋 Activity Log"
-logsTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
-logsTitle.TextScaled = true
-logsTitle.Font = Enum.Font.GothamBold
-logsTitle.Parent = logFrame
-
--- Manual Order Input
-local inputFrame = Instance.new("Frame")
-inputFrame.Size = UDim2.new(1, -20, 0, 90)
-inputFrame.Position = UDim2.new(0, 10, 0, 485)
-inputFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
-inputFrame.BorderSizePixel = 0
-inputFrame.Parent = mainFrame
-
-local usernameInput = Instance.new("TextBox")
-usernameInput.Size = UDim2.new(1, -10, 0, 30)
-usernameInput.Position = UDim2.new(0, 5, 0, 5)
-usernameInput.PlaceholderText = "Enter username..."
-usernameInput.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
-usernameInput.TextColor3 = Color3.fromRGB(255, 255, 255)
-usernameInput.Font = Enum.Font.Gotham
-usernameInput.TextSize = 12
-usernameInput.Parent = inputFrame
-
-local itemsInput = Instance.new("TextBox")
-itemsInput.Size = UDim2.new(1, -10, 0, 30)
-itemsInput.Position = UDim2.new(0, 5, 0, 40)
-itemsInput.PlaceholderText = "Items (comma separated, e.g., Chroma Knife, Elderwood Scythe)"
-itemsInput.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
-itemsInput.TextColor3 = Color3.fromRGB(255, 255, 255)
-itemsInput.Font = Enum.Font.Gotham
-itemsInput.TextSize = 11
-itemsInput.Parent = inputFrame
-
-local sendBtn = Instance.new("TextButton")
-sendBtn.Size = UDim2.new(0, 100, 0, 35)
-sendBtn.Position = UDim2.new(1, -105, 0, 45)
-sendBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 200)
-sendBtn.Text = "Send Trade"
-sendBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-sendBtn.Font = Enum.Font.GothamBold
-sendBtn.TextSize = 12
-sendBtn.Parent = inputFrame
-
--- Start/Stop button logic
-startStopBtn.MouseButton1Click:Connect(function()
-    botActive = not botActive
-    emoteSpamActive = botActive
-    
-    if botActive then
-        startStopBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
-        startStopBtn.Text = "⏸ STOP"
-        statusText.Text = "🟢 STATUS: RUNNING"
-        statusText.TextColor3 = Color3.fromRGB(0, 255, 100)
-        emoteStatusText.Text = "💬 EMOTE SPAM: ACTIVE (saying 'hello' every 3s)"
-        emoteStatusText.TextColor3 = Color3.fromRGB(100, 255, 100)
-        addLog("✅ Bot STARTED - Now processing trades and spamming hello emote")
-        
-        -- Restart emote spam
-        spamHelloEmote()
-    else
-        startStopBtn.BackgroundColor3 = Color3.fromRGB(150, 0, 0)
-        startStopBtn.Text = "▶ START"
-        statusText.Text = "🔴 STATUS: STOPPED"
-        statusText.TextColor3 = Color3.fromRGB(255, 100, 100)
-        emoteStatusText.Text = "💬 EMOTE SPAM: INACTIVE"
-        emoteStatusText.TextColor3 = Color3.fromRGB(255, 100, 100)
-        addLog("⏸ Bot STOPPED - No longer processing trades or spamming emote")
-    end
-end)
-
--- Logging function
-local function addLog(message, isError)
-    local logMessage = Instance.new("TextLabel")
-    logMessage.Size = UDim2.new(1, -10, 0, 20)
-    logMessage.BackgroundTransparency = 1
-    logMessage.Text = "[" .. os.date("%H:%M:%S") .. "] " .. message
-    logMessage.TextColor3 = isError and Color3.fromRGB(255, 100, 100) or Color3.fromRGB(200, 200, 200)
-    logMessage.TextXAlignment = Enum.TextXAlignment.Left
-    logMessage.TextSize = 11
-    logMessage.Font = Enum.Font.Gotham
-    logMessage.Parent = logFrame
+-- Log function
+local function addLog(msg, isError)
+    local logEntry = Instance.new("TextLabel")
+    logEntry.Size = UDim2.new(1, -10, 0, 18)
+    logEntry.BackgroundTransparency = 1
+    logEntry.Text = "[" .. os.date("%H:%M:%S") .. "] " .. msg
+    logEntry.TextColor3 = isError and Color3.fromRGB(255, 80, 80) or Color3.fromRGB(200, 200, 200)
+    logEntry.TextXAlignment = Enum.TextXAlignment.Left
+    logEntry.TextSize = 10
+    logEntry.Font = Enum.Font.Gotham
+    logEntry.Parent = logFrame
     
     task.wait()
     logFrame.CanvasPosition = Vector2.new(0, logFrame.AbsoluteCanvasSize.Y)
     
-    if #logFrame:GetChildren() > 150 then
-        for i = 1, 30 do
+    -- Keep last 100 logs
+    if #logFrame:GetChildren() > 100 then
+        for i = 1, 20 do
             local child = logFrame:GetChildren()[i]
-            if child and child ~= logsTitle then
+            if child and child ~= logTitle then
                 child:Destroy()
             end
         end
     end
-    
-    print("[EchoKnives] " .. message)
 end
 
--- Function to send trade request
-local function sendTradeRequest(username, items)
-    if not botActive then
-        addLog("⚠️ Bot is stopped. Press START to begin.", true)
-        return false
-    end
-    
-    if isProcessing then
-        addLog("⏳ Already processing, please wait...", true)
-        return false
-    end
-    
-    local targetPlayer = nil
+-- Spam hello emote
+local function spamHello()
+    task.spawn(function()
+        while botActive do
+            if botActive then
+                pcall(function()
+                    -- Say hello in chat
+                    local chat = game:GetService("Chat")
+                    local character = player.Character
+                    if character and character:FindFirstChild("Head") then
+                        chat:Chat(character.Head, "hello", Enum.ChatColor.Blue)
+                        addLog("💬 Said 'hello'")
+                    end
+                end)
+            end
+            task.wait(5)
+        end
+    end)
+end
+
+-- Send trade request
+local function sendTradeRequest(username)
+    local target = nil
     for _, plr in pairs(Players:GetPlayers()) do
-        if plr.Name:lower() == username:lower() or (plr.DisplayName and plr.DisplayName:lower() == username:lower()) then
-            targetPlayer = plr
+        if plr.Name:lower() == username:lower() then
+            target = plr
             break
         end
     end
     
-    if not targetPlayer then
+    if not target then
         addLog("❌ Player not found: " .. username, true)
         return false
     end
     
-    local itemList = {}
-    if type(items) == "string" then
-        for item in items:gmatch("[^,]+") do
-            table.insert(itemList, item:gsub("^%s+", ""):gsub("%s+$", ""))
-        end
-    else
-        itemList = items
-    end
-    
-    tradeInventory[targetPlayer.Name] = itemList
-    
-    local tradeSent = false
-    local possibleRemotes = {"TradeRequest", "RequestTrade", "SendTrade", "TradeInvite"}
-    
-    for _, remoteName in pairs(possibleRemotes) do
-        local remote = ReplicatedStorage:FindFirstChild(remoteName)
-        if remote and remote:IsA("RemoteEvent") then
-            pcall(function()
-                remote:FireServer(targetPlayer)
-                addLog("📤 Sent trade request to: " .. username)
-                tradeSent = true
-                return true
-            end)
-            if tradeSent then break end
-        end
-    end
-    
-    if not tradeSent then
-        for _, obj in pairs(ReplicatedStorage:GetChildren()) do
-            if obj:IsA("RemoteEvent") and (obj.Name:lower():find("trade") or obj.Name:lower():find("request")) then
-                pcall(function()
-                    obj:FireServer(targetPlayer)
-                    addLog("📤 Sent trade request to: " .. username)
-                    tradeSent = true
-                    break
-                end)
+    local success = false
+    pcall(function()
+        -- Try common trade remotes
+        local remotes = {"TradeRequest", "RequestTrade", "SendTrade", "Trade"}
+        for _, name in pairs(remotes) do
+            local remote = game:GetService("ReplicatedStorage"):FindFirstChild(name)
+            if remote and remote:IsA("RemoteEvent") then
+                remote:FireServer(target)
+                addLog("📤 Trade request sent to: " .. username)
+                success = true
+                break
             end
         end
-    end
-    
-    if not tradeSent then
-        addLog("⚠️ Could not send trade request to: " .. username, true)
-        tradeInventory[targetPlayer.Name] = nil
-        return false
-    end
-    
-    return true
-end
-
--- Function to auto-accept and complete trades
-local function autoAcceptAndComplete()
-    if not botActive then return false end
-    if isProcessing then return false end
-    
-    local success = pcall(function()
-        local tradeGui = nil
-        local possibleGUIs = {"Trade", "TradeGUI", "Trading", "TradeMenu"}
-        
-        for _, guiName in pairs(possibleGUIs) do
-            tradeGui = player.PlayerGui:FindFirstChild(guiName)
-            if tradeGui then break end
-        end
-        
-        if tradeGui and tradeGui.Enabled then
-            local acceptBtn = nil
-            local possibleButtons = {"Accept", "AcceptButton", "Confirm", "ConfirmTrade", "AcceptTrade"}
-            
-            for _, btnName in pairs(possibleButtons) do
-                acceptBtn = tradeGui:FindFirstChild(btnName, true)
-                if acceptBtn and acceptBtn:IsA("TextButton") and acceptBtn.Visible then break end
-            end
-            
-            if acceptBtn and acceptBtn.Visible and acceptBtn:IsA("TextButton") then
-                isProcessing = true
-                
-                local tradePartner = nil
-                local nameLabels = {"PlayerName", "Username", "TraderName", "PartnerName"}
-                
-                for _, labelName in pairs(nameLabels) do
-                    local label = tradeGui:FindFirstChild(labelName, true)
-                    if label and label:IsA("TextLabel") then
-                        tradePartner = label.Text
-                        break
-                    end
-                end
-                
-                if tradePartner and tradeInventory[tradePartner] then
-                    addLog("🎁 Adding items for: " .. tradePartner)
-                    
-                    local inventoryArea = nil
-                    local possibleAreas = {"Inventory", "MyItems", "PlayerInventory", "ItemsList"}
-                    
-                    for _, areaName in pairs(possibleAreas) do
-                        inventoryArea = tradeGui:FindFirstChild(areaName, true)
-                        if inventoryArea then break end
-                    end
-                    
-                    if inventoryArea then
-                        local itemsToAdd = tradeInventory[tradePartner]
-                        
-                        for _, itemName in pairs(itemsToAdd) do
-                            local itemButton = nil
-                            for _, child in pairs(inventoryArea:GetDescendants()) do
-                                if child:IsA("ImageButton") or child:IsA("TextButton") then
-                                    if child.Name:lower():find(itemName:lower()) or 
-                                       (child:FindFirstChild("TextLabel") and child.TextLabel.Text:lower():find(itemName:lower())) then
-                                        itemButton = child
-                                        break
-                                    end
-                                end
-                            end
-                            
-                            if itemButton then
-                                itemButton:Click()
-                                addLog("➕ Added: " .. itemName)
-                                task.wait(0.3)
-                            else
-                                addLog("⚠️ Item not found: " .. itemName, true)
-                            end
-                        end
-                    end
-                    
-                    task.wait(0.5)
-                end
-                
-                acceptBtn:Click()
-                addLog("✅ Trade accepted with: " .. (tradePartner or "Unknown"))
-                
-                tradeCount = tradeCount + 1
-                tradesCompletedLabel.Text = "✅ Completed Trades: " .. tradeCount
-                
-                if tradePartner then
-                    tradeInventory[tradePartner] = nil
-                end
-                
-                isProcessing = false
-                return true
-            end
-        end
-        return false
     end)
     
-    isProcessing = false
+    if not success then
+        addLog("⚠️ Could not send trade request", true)
+    end
+    
     return success
 end
 
--- Monitor for incoming trades
-local function startMonitoring()
-    task.spawn(function()
-        while true do
-            task.wait(1)
-            autoAcceptAndComplete()
+-- Auto accept trades
+local function autoAccept()
+    pcall(function()
+        -- Look for trade GUI in PlayerGui
+        local tradeGui = player.PlayerGui:FindFirstChild("TradeGUI")
+        if not tradeGui then
+            tradeGui = player.PlayerGui:FindFirstChild("Trade")
         end
-    end)
-    
-    task.spawn(function()
-        for _, obj in pairs(ReplicatedStorage:GetChildren()) do
-            if obj:IsA("RemoteEvent") then
-                local eventName = obj.Name:lower()
-                if eventName:find("trade") or eventName:find("request") or eventName:find("invite") then
-                    obj.OnClientEvent:Connect(function(...)
-                        if not botActive then return end
-                        local args = {...}
-                        for _, arg in pairs(args) do
-                            if type(arg) == "Instance" and arg:IsA("Player") then
-                                addLog("📨 Trade request FROM: " .. arg.Name)
-                                task.wait(0.5)
-                                autoAcceptAndComplete()
-                                break
-                            end
-                        end
-                    end)
-                end
+        
+        if tradeGui and tradeGui.Enabled then
+            local acceptBtn = tradeGui:FindFirstChild("Accept")
+            if acceptBtn and acceptBtn:IsA("TextButton") and acceptBtn.Visible then
+                acceptBtn:Click()
+                tradeCount = tradeCount + 1
+                tradeCounter.Text = "✅ COMPLETED TRADES: " .. tradeCount
+                addLog("✅ Trade completed! Total: " .. tradeCount)
             end
         end
     end)
 end
 
--- Website checker for echoknives.onrender.com
-local function checkWebsite()
-    task.spawn(function()
-        while true do
-            task.wait(15)
-            if not botActive then continue end
-            
-            pcall(function()
-                local request = syn and syn.request or request or http_request
-                if request then
-                    local response = request({
-                        Url = WebsiteURL .. "/api/getOrders",
-                        Method = "GET",
-                        Headers = {["Content-Type"] = "application/json"}
-                    })
-                    
-                    if response and response.Body then
-                        local data = HttpService:JSONDecode(response.Body)
-                        if data.orders then
-                            for _, order in pairs(data.orders) do
-                                if not order.completed then
-                                    addLog("📦 New order from website: " .. order.username)
-                                    sendTradeRequest(order.username, order.items)
-                                end
-                            end
-                        end
-                    end
-                end
-            end)
-        end
-    end)
-end
-
--- Manual send button
-sendBtn.MouseButton1Click:Connect(function()
-    local username = usernameInput.Text
-    local items = itemsInput.Text
+-- Button events
+toggleBtn.MouseButton1Click:Connect(function()
+    botActive = not botActive
     
-    if username == "" or items == "" then
-        addLog("⚠️ Please enter both username and items", true)
+    if botActive then
+        toggleBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 0)
+        toggleBtn.Text = "START"
+        statusLabel.Text = "🟢 STATUS: RUNNING"
+        statusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
+        emoteStatus.Text = "💬 HELLO EMOTE: ACTIVE (every 5s)"
+        emoteStatus.TextColor3 = Color3.fromRGB(100, 255, 100)
+        addLog("✅ Bot started")
+        spamHello()
+    else
+        toggleBtn.BackgroundColor3 = Color3.fromRGB(200, 0, 0)
+        toggleBtn.Text = "STOP"
+        statusLabel.Text = "🔴 STATUS: STOPPED"
+        statusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+        emoteStatus.Text = "💬 HELLO EMOTE: INACTIVE"
+        emoteStatus.TextColor3 = Color3.fromRGB(255, 100, 100)
+        addLog("⏸ Bot stopped")
+    end
+end)
+
+closeBtn.MouseButton1Click:Connect(function()
+    screenGui:Destroy()
+end)
+
+sendBtn.MouseButton1Click:Connect(function()
+    if not botActive then
+        addLog("⚠️ Bot is stopped! Press START first", true)
         return
     end
     
-    sendTradeRequest(username, items)
-    usernameInput.Text = ""
-    itemsInput.Text = ""
+    local username = usernameBox.Text
+    if username == "" then
+        addLog("⚠️ Enter a username", true)
+        return
+    end
+    
+    sendTradeRequest(username)
+    usernameBox.Text = ""
 end)
 
--- Initialize bot
-addLog("🚀 EchoKnives Trade Bot v3.0 Initialized")
-addLog("💡 Bot will auto-accept incoming trade requests")
-addLog("💬 Emote spam ACTIVE - saying 'hello' every 3 seconds")
-addLog("📡 Use the form above to send trade requests")
-addLog("🟢 Bot is RUNNING - Press STOP to pause")
-addLog("✨ Bot is ready!")
+-- Auto-accept loop
+task.spawn(function()
+    while true do
+        task.wait(1)
+        if botActive then
+            autoAccept()
+        end
+    end
+end)
 
-startMonitoring()
-checkWebsite()
-spamHelloEmote() -- Start emote spam
+-- Start bot
+spamHello()
+
+-- Initial logs
+addLog("🚀 TRADE BOT LOADED!")
+addLog("💬 Spamming 'hello' every 5 seconds")
+addLog("🟢 Bot is RUNNING")
+addLog("📝 Enter username and click SEND TRADE REQUEST")
+addLog("✨ Drag window by clicking the top bar")
+addLog("🎮 GUI is on PlayerGui - NOT CoreGui!")
+
+-- Flash border to confirm visibility
+for i = 1, 3 do
+    mainFrame.BorderColor3 = Color3.fromRGB(255, 255, 0)
+    task.wait(0.1)
+    mainFrame.BorderColor3 = Color3.fromRGB(0, 255, 0)
+    task.wait(0.1)
+end
+
+print("========================================")
+print("✅ GUI SHOULD BE VISIBLE NOW!")
+print("📍 Look for a BLACK window with GREEN border")
+print("📍 It's on your PlayerGui, NOT CoreGui")
+print("📍 If still invisible, check if PlayerGui exists")
+print("========================================")
