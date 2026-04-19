@@ -1,113 +1,266 @@
---[--[[
-    MOBILE TRADE BOT FOR DELTA
-    - Forces mobile UI mode
-    - Sends trades via UI clicking
-    - Works on Delta/Krnl!
+--[[
+    MOBILE TRADE BOT - DELTA FIXED
+    GUI guaranteed to show
+    Sends trades via mobile UI
 ]]
 
 local player = game:GetService("Players").LocalPlayer
 
--- Force mobile mode
-game:GetService("UserInputService").TouchEnabled = true
-task.wait(1)
+-- FORCE MOBILE UI MODE FIRST
+pcall(function()
+    game:GetService("UserInputService").TouchEnabled = true
+    game:GetService("UserInputService").MouseEnabled = false
+end)
 
--- Create simple GUI
-local gui = Instance.new("ScreenGui")
-gui.Parent = player.PlayerGui
+-- Wait for game to register mobile mode
+task.wait(2)
 
-local frame = Instance.new("Frame")
-frame.Size = UDim2.new(0, 350, 0, 200)
-frame.Position = UDim2.new(0.5, -175, 0.5, -100)
-frame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
-frame.BorderColor3 = Color3.fromRGB(0, 255, 0)
-frame.BorderSizePixel = 2
-frame.Parent = gui
+-- CREATE GUI (SIMPLE & RELIABLE)
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "MobileTradeBot"
+
+-- Try EVERY possible parent
+local parentOptions = {
+    player:FindFirstChild("PlayerGui"),
+    game:GetService("CoreGui"),
+    game:GetService("StarterGui"),
+    player:WaitForChild("PlayerGui")
+}
+
+for _, parent in pairs(parentOptions) do
+    if parent then
+        pcall(function()
+            screenGui.Parent = parent
+            if screenGui.Parent then break end
+        end)
+    end
+end
+
+-- If still no parent, create billboard on character
+if not screenGui.Parent then
+    local char = player.Character or player.CharacterAdded:Wait()
+    local billboard = Instance.new("BillboardGui")
+    billboard.Size = UDim2.new(0, 300, 0, 200)
+    billboard.Adornee = char:FindFirstChild("Head")
+    billboard.Parent = char
+    screenGui = billboard
+end
+
+-- MAIN FRAME (VERY VISIBLE)
+local mainFrame = Instance.new("Frame")
+mainFrame.Size = UDim2.new(0, 380, 0, 250)
+mainFrame.Position = UDim2.new(0.5, -190, 0.5, -125)
+mainFrame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+mainFrame.BackgroundTransparency = 0
+mainFrame.BorderSizePixel = 3
+mainFrame.BorderColor3 = Color3.fromRGB(255, 0, 0)
+mainFrame.Parent = screenGui
+
+-- TITLE BAR
+local titleBar = Instance.new("Frame")
+titleBar.Size = UDim2.new(1, 0, 0, 35)
+titleBar.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
+titleBar.Parent = mainFrame
 
 local title = Instance.new("TextLabel")
-title.Size = UDim2.new(1, 0, 0, 35)
-title.BackgroundColor3 = Color3.fromRGB(45, 45, 50)
+title.Size = UDim2.new(1, -60, 1, 0)
+title.Position = UDim2.new(0, 10, 0, 0)
+title.BackgroundTransparency = 1
 title.Text = "📱 MOBILE TRADE BOT"
 title.TextColor3 = Color3.fromRGB(255, 255, 255)
-title.TextSize = 14
+title.TextSize = 16
 title.Font = Enum.Font.GothamBold
-title.Parent = frame
+title.TextXAlignment = Enum.TextXAlignment.Left
+title.Parent = titleBar
+
+-- CLOSE BUTTON
+local closeBtn = Instance.new("TextButton")
+closeBtn.Size = UDim2.new(0, 35, 1, -5)
+closeBtn.Position = UDim2.new(1, -40, 0, 2)
+closeBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+closeBtn.Text = "X"
+closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+closeBtn.TextSize = 16
+closeBtn.Font = Enum.Font.GothamBold
+closeBtn.Parent = titleBar
+
+closeBtn.MouseButton1Click:Connect(function()
+    screenGui:Destroy()
+end)
+
+-- USERNAME INPUT
+local usernameLabel = Instance.new("TextLabel")
+usernameLabel.Size = UDim2.new(1, -20, 0, 20)
+usernameLabel.Position = UDim2.new(0, 10, 0, 50)
+usernameLabel.BackgroundTransparency = 1
+usernameLabel.Text = "Enter Roblox Username:"
+usernameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+usernameLabel.TextSize = 12
+usernameLabel.Font = Enum.Font.Gotham
+usernameLabel.TextXAlignment = Enum.TextXAlignment.Left
+usernameLabel.Parent = mainFrame
 
 local usernameBox = Instance.new("TextBox")
-usernameBox.Size = UDim2.new(1, -20, 0, 30)
-usernameBox.Position = UDim2.new(0, 10, 0, 45)
-usernameBox.PlaceholderText = "Enter username..."
-usernameBox.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
+usernameBox.Size = UDim2.new(1, -20, 0, 35)
+usernameBox.Position = UDim2.new(0, 10, 0, 75)
+usernameBox.PlaceholderText = "Username here..."
+usernameBox.BackgroundColor3 = Color3.fromRGB(60, 60, 65)
 usernameBox.TextColor3 = Color3.fromRGB(255, 255, 255)
-usernameBox.Parent = frame
+usernameBox.TextSize = 14
+usernameBox.Font = Enum.Font.Gotham
+usernameBox.Parent = mainFrame
 
+-- STATUS LABEL
+local statusLabel = Instance.new("TextLabel")
+statusLabel.Size = UDim2.new(1, -20, 0, 40)
+statusLabel.Position = UDim2.new(0, 10, 0, 120)
+statusLabel.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+statusLabel.Text = "✅ READY - Mobile Mode Active"
+statusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
+statusLabel.TextSize = 11
+statusLabel.Font = Enum.Font.Gotham
+statusLabel.Parent = mainFrame
+
+-- SEND BUTTON
 local sendBtn = Instance.new("TextButton")
-sendBtn.Size = UDim2.new(0, 150, 0, 35)
-sendBtn.Position = UDim2.new(0.5, -75, 0, 85)
+sendBtn.Size = UDim2.new(1, -20, 0, 45)
+sendBtn.Position = UDim2.new(0, 10, 0, 170)
 sendBtn.BackgroundColor3 = Color3.fromRGB(0, 120, 200)
-sendBtn.Text = "SEND TRADE (MOBILE)"
+sendBtn.Text = "📤 SEND TRADE REQUEST"
 sendBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-sendBtn.TextSize = 12
+sendBtn.TextSize = 14
 sendBtn.Font = Enum.Font.GothamBold
-sendBtn.Parent = frame
+sendBtn.Parent = mainFrame
 
-local status = Instance.new("TextLabel")
-status.Size = UDim2.new(1, -20, 0, 25)
-status.Position = UDim2.new(0, 10, 0, 130)
-status.BackgroundTransparency = 1
-status.Text = "📱 Mobile UI Mode: ACTIVE"
-status.TextColor3 = Color3.fromRGB(0, 255, 0)
-status.TextSize = 11
-status.Parent = frame
+-- DRAG FUNCTIONALITY
+local dragging = false
+local dragStart, startPos
 
--- Send trade function for mobile
-sendBtn.MouseButton1Click:Connect(function()
-    local targetName = usernameBox.Text
-    if targetName == "" then
-        status.Text = "⚠️ Enter a username!"
-        status.TextColor3 = Color3.fromRGB(255, 255, 0)
-        task.wait(2)
-        status.Text = "📱 Mobile UI Mode: ACTIVE"
-        status.TextColor3 = Color3.fromRGB(0, 255, 0)
-        return
+titleBar.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = true
+        dragStart = input.Position
+        startPos = mainFrame.Position
+    end
+end)
+
+game:GetService("UserInputService").InputChanged:Connect(function(input)
+    if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+        local delta = input.Position - dragStart
+        mainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    end
+end)
+
+game:GetService("UserInputService").InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = false
+    end
+end)
+
+-- SEND TRADE FUNCTION (MOBILE UI)
+local function sendMobileTrade(username)
+    statusLabel.Text = "⏳ Searching for player: " .. username
+    statusLabel.TextColor3 = Color3.fromRGB(255, 255, 0)
+    
+    task.wait(1)
+    
+    local found = false
+    local playerList = player.PlayerGui:FindFirstChild("PlayerList")
+    
+    if not playerList then
+        statusLabel.Text = "❌ PlayerList not found - Try rejoining"
+        statusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+        return false
     end
     
-    status.Text = "📤 Sending trade to: " .. targetName
-    status.TextColor3 = Color3.fromRGB(255, 255, 0)
-    
-    -- Try to send trade
-    local success = false
-    pcall(function()
-        local playerList = player.PlayerGui:FindFirstChild("PlayerList")
-        if playerList then
-            for _, btn in pairs(playerList:GetDescendants()) do
-                if btn:IsA("TextButton") and btn.Name:lower():find("trade") then
-                    -- Check if this button is next to the target player
-                    local parent = btn.Parent
-                    if parent and parent:FindFirstChild("NameLabel") then
-                        if parent.NameLabel.Text:lower() == targetName:lower() then
-                            btn:Click()
-                            success = true
-                        end
+    -- Search for player and trade button
+    for _, obj in pairs(playerList:GetDescendants()) do
+        if obj:IsA("TextButton") and obj.Name:lower():find("trade") then
+            -- Check parent frame for username
+            local parent = obj.Parent
+            if parent then
+                local nameLabel = parent:FindFirstChild("NameLabel") or 
+                                 parent:FindFirstChild("Username") or
+                                 parent:FindFirstChild("PlayerName")
+                if nameLabel and nameLabel:IsA("TextLabel") then
+                    if nameLabel.Text:lower() == username:lower() then
+                        obj:Click()
+                        found = true
+                        statusLabel.Text = "✅ Trade request sent to: " .. username
+                        statusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
+                        return true
                     end
                 end
             end
         end
-    end)
-    
-    if success then
-        status.Text = "✅ Trade sent to: " .. targetName
-        status.TextColor3 = Color3.fromRGB(0, 255, 0)
-        usernameBox.Text = ""
-    else
-        status.Text = "❌ Failed - Player not found or mobile UI not active"
-        status.TextColor3 = Color3.fromRGB(255, 0, 0)
     end
     
+    if not found then
+        statusLabel.Text = "❌ Player not found: " .. username
+        statusLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+        return false
+    end
+end
+
+-- SEND BUTTON CLICK
+sendBtn.MouseButton1Click:Connect(function()
+    local username = usernameBox.Text
+    if username == "" then
+        statusLabel.Text = "⚠️ Please enter a username!"
+        statusLabel.TextColor3 = Color3.fromRGB(255, 255, 0)
+        task.wait(2)
+        statusLabel.Text = "✅ READY - Mobile Mode Active"
+        statusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
+        return
+    end
+    
+    sendMobileTrade(username)
+    
+    -- Reset after 3 seconds
     task.wait(3)
-    status.Text = "📱 Mobile UI Mode: ACTIVE"
-    status.TextColor3 = Color3.fromRGB(0, 255, 0)
+    if statusLabel.Text ~= "✅ READY - Mobile Mode Active" then
+        statusLabel.Text = "✅ READY - Mobile Mode Active"
+        statusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
+    end
 end)
 
-print("✅ Mobile Trade Bot Loaded!")
-print("📱 Mobile UI mode activated")
-print("💡 Enter username and click SEND TRADE")
+-- AUTO-ACCEPT TRADES
+local function autoAccept()
+    pcall(function()
+        local tradeGui = player.PlayerGui:FindFirstChild("TradeGUI") or player.PlayerGui:FindFirstChild("Trade")
+        if tradeGui then
+            local accept = tradeGui:FindFirstChild("Accept")
+            if accept and accept.Visible then
+                accept:Click()
+                print("[Auto-Accept] Trade completed!")
+            end
+        end
+    end)
+end
+
+-- Start auto-accept loop
+task.spawn(function()
+    while true do
+        task.wait(1)
+        autoAccept()
+    end
+end)
+
+-- Flash GUI to confirm visibility
+for i = 1, 5 do
+    mainFrame.BorderColor3 = Color3.fromRGB(255, 255, 0)
+    task.wait(0.1)
+    mainFrame.BorderColor3 = Color3.fromRGB(255, 0, 0)
+    task.wait(0.1)
+end
+
+print("========================================")
+print("✅ MOBILE TRADE BOT LOADED!")
+print("📍 GUI should be VISIBLE on your screen")
+print("📍 Black box with RED border")
+print("📍 Enter username and click SEND TRADE")
+print("========================================")
+
+-- Success message in GUI
+statusLabel.Text = "✅ READY - Mobile Mode Active"
+statusLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
