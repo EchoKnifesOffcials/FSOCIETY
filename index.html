@@ -1,501 +1,85 @@
---[[
-    MM2 TRADE BOT - WORKING WITH REAL REMOTES
-    Uses actual MM2 trade remote names
-    Works on Synapse X / ScriptWare
-]]
+-- MM2 TRADING ASSISTANT (SAFE / LEGIT)
 
 local player = game:GetService("Players").LocalPlayer
-local replicatedStorage = game:GetService("ReplicatedStorage")
-local chatService = game:GetService("Chat")
-local userInputService = game:GetService("UserInputService")
 
--- ===== TRADE REMOTES =====
-local Trade = replicatedStorage:FindFirstChild("Trade")
-if not Trade then
-    warn("Trade folder not found!")
-    return
-end
-
-local remotes = {
-    getRequest = Trade:FindFirstChild("GetRequest"),
-    acceptRequest = Trade:FindFirstChild("AcceptRequest"),
-    declineRequest = Trade:FindFirstChild("DeclineRequest"),
-    acceptTrade = Trade:FindFirstChild("AcceptTrade"),
-    declineTrade = Trade:FindFirstChild("DeclineTrade"),
-    startTrade = Trade:FindFirstChild("StartTrade"),
-    offerItem = Trade:FindFirstChild("OfferItem"),
-    updateOffers = Trade:FindFirstChild("UpdateOffers"),
-    removeOffer = Trade:FindFirstChild("RemoveOffer"),
-    endTrade = Trade:FindFirstChild("EndTrade"),
-    cancelRequest = Trade:FindFirstChild("CancelRequest"),
-    completeTrade = Trade:FindFirstChild("CompleteTrade"),
-    updateTrade = Trade:FindFirstChild("UpdateTrade"),
-    cancelAccept = Trade:FindFirstChild("CancelAccept"),
-    setRequestsEnabled = Trade:FindFirstChild("SetRequestsEnabled"),
-    requestSent = Trade:FindFirstChild("RequestSent")
+-- ===== ITEM VALUES (EDIT THESE) =====
+local itemValues = {
+    ["Chroma Knife"] = 500,
+    ["Elderwood Scythe"] = 300,
+    ["Luger"] = 120,
+    ["Darkbringer"] = 150,
+    ["Lightbringer"] = 150
 }
 
--- Check all remotes exist
-for name, remote in pairs(remotes) do
-    if not remote then
-        print("[WARN] Missing remote: " .. name)
+-- ===== GUI =====
+local screenGui = Instance.new("ScreenGui", player.PlayerGui)
+screenGui.Name = "TradeAssistant"
+
+local frame = Instance.new("Frame", screenGui)
+frame.Size = UDim2.new(0, 350, 0, 400)
+frame.Position = UDim2.new(0.5, -175, 0.5, -200)
+frame.BackgroundColor3 = Color3.fromRGB(30,30,35)
+
+-- Title
+local title = Instance.new("TextLabel", frame)
+title.Size = UDim2.new(1,0,0,40)
+title.Text = "MM2 Trade Assistant"
+title.TextColor3 = Color3.new(1,1,1)
+title.BackgroundColor3 = Color3.fromRGB(45,45,50)
+
+-- Your Items
+local yourBox = Instance.new("TextBox", frame)
+yourBox.PlaceholderText = "Your items (comma)"
+yourBox.Size = UDim2.new(1,-20,0,35)
+yourBox.Position = UDim2.new(0,10,0,60)
+
+-- Their Items
+local theirBox = Instance.new("TextBox", frame)
+theirBox.PlaceholderText = "Their items (comma)"
+theirBox.Size = UDim2.new(1,-20,0,35)
+theirBox.Position = UDim2.new(0,10,0,110)
+
+-- Result Label
+local result = Instance.new("TextLabel", frame)
+result.Size = UDim2.new(1,-20,0,60)
+result.Position = UDim2.new(0,10,0,160)
+result.Text = "Result will show here"
+result.TextColor3 = Color3.new(1,1,1)
+result.BackgroundColor3 = Color3.fromRGB(40,40,45)
+
+-- Button
+local checkBtn = Instance.new("TextButton", frame)
+checkBtn.Size = UDim2.new(1,-20,0,40)
+checkBtn.Position = UDim2.new(0,10,0,230)
+checkBtn.Text = "Check Trade"
+checkBtn.BackgroundColor3 = Color3.fromRGB(0,120,200)
+
+-- ===== LOGIC =====
+local function calculateTotal(text)
+    local total = 0
+    for item in text:gmatch("[^,]+") do
+        item = item:gsub("^%s+",""):gsub("%s+$","")
+        if itemValues[item] then
+            total += itemValues[item]
+        end
+    end
+    return total
+end
+
+checkBtn.MouseButton1Click:Connect(function()
+    local yourTotal = calculateTotal(yourBox.Text)
+    local theirTotal = calculateTotal(theirBox.Text)
+
+    local diff = theirTotal - yourTotal
+
+    if diff > 0 then
+        result.Text = "✅ WIN (+ "..diff..")"
+        result.TextColor3 = Color3.fromRGB(0,255,0)
+    elseif diff < 0 then
+        result.Text = "❌ LOSS ("..diff..")"
+        result.TextColor3 = Color3.fromRGB(255,0,0)
     else
-        print("[OK] Found: " .. name)
+        result.Text = "⚖️ FAIR TRADE"
+        result.TextColor3 = Color3.fromRGB(255,255,0)
     end
-end
-
--- ===== BOT STATE =====
-local botActive = true
-local tradeCount = 0
-local currentTradePartner = nil
-local currentOffers = {}
-
--- ===== FORCE TABLET UI =====
-userInputService.TouchEnabled = true
-userInputService.MouseEnabled = false
-
--- ===== SEND TRADE REQUEST =====
-local function sendTradeRequest(username)
-    -- Find target player
-    local targetPlayer = nil
-    for _, plr in pairs(game:GetService("Players"):GetPlayers()) do
-        if plr.Name:lower() == username:lower() then
-            targetPlayer = plr
-            break
-        end
-    end
-    
-    if not targetPlayer then
-        print("[❌] Player not found: " .. username)
-        return false
-    end
-    
-    -- Method 1: Use GetRequest remote
-    if remotes.getRequest and remotes.getRequest:IsA("RemoteEvent") then
-        remotes.getRequest:FireServer(targetPlayer)
-        print("[📤] Trade request sent to: " .. username)
-        currentTradePartner = targetPlayer
-        return true
-    end
-    
-    -- Method 2: Use StartTrade remote
-    if remotes.startTrade and remotes.startTrade:IsA("RemoteEvent") then
-        remotes.startTrade:FireServer(targetPlayer)
-        print("[📤] Trade started with: " .. username)
-        currentTradePartner = targetPlayer
-        return true
-    end
-    
-    print("[❌] No working trade remote found")
-    return false
-end
-
--- ===== ACCEPT TRADE REQUEST =====
-local function acceptTradeRequest()
-    if remotes.acceptRequest and remotes.acceptRequest:IsA("RemoteEvent") then
-        remotes.acceptRequest:FireServer()
-        print("[✅] Trade request accepted")
-        return true
-    end
-    return false
-end
-
--- ===== DECLINE TRADE REQUEST =====
-local function declineTradeRequest()
-    if remotes.declineRequest and remotes.declineRequest:IsA("RemoteEvent") then
-        remotes.declineRequest:FireServer()
-        print("[❌] Trade request declined")
-        return true
-    end
-    return false
-end
-
--- ===== OFFER ITEM =====
-local function offerItem(itemId, itemData)
-    if remotes.offerItem and remotes.offerItem:IsA("RemoteEvent") then
-        remotes.offerItem:FireServer(itemId, itemData)
-        print("[🎁] Offered item: " .. tostring(itemId))
-        table.insert(currentOffers, itemId)
-        return true
-    end
-    return false
-end
-
--- ===== REMOVE OFFER =====
-local function removeOffer(itemId)
-    if remotes.removeOffer and remotes.removeOffer:IsA("RemoteEvent") then
-        remotes.removeOffer:FireServer(itemId)
-        print("[🗑️] Removed offer: " .. tostring(itemId))
-        return true
-    end
-    return false
-end
-
--- ===== ACCEPT TRADE (Final accept) =====
-local function acceptTrade()
-    if remotes.acceptTrade and remotes.acceptTrade:IsA("RemoteEvent") then
-        remotes.acceptTrade:FireServer()
-        print("[✅] Trade accepted!")
-        return true
-    end
-    return false
-end
-
--- ===== DECLINE TRADE =====
-local function declineTrade()
-    if remotes.declineTrade and remotes.declineTrade:IsA("RemoteEvent") then
-        remotes.declineTrade:FireServer()
-        print("[❌] Trade declined")
-        return true
-    end
-    return false
-end
-
--- ===== CANCEL REQUEST =====
-local function cancelRequest()
-    if remotes.cancelRequest and remotes.cancelRequest:IsA("RemoteEvent") then
-        remotes.cancelRequest:FireServer()
-        print("[🔄] Trade request cancelled")
-        return true
-    end
-    return false
-end
-
--- ===== END TRADE =====
-local function endTrade()
-    if remotes.endTrade and remotes.endTrade:IsA("RemoteEvent") then
-        remotes.endTrade:FireServer()
-        print("[🏁] Trade ended")
-        return true
-    end
-    return false
-end
-
--- ===== COMPLETE TRADE =====
-local function completeTrade()
-    if remotes.completeTrade and remotes.completeTrade:IsA("RemoteEvent") then
-        remotes.completeTrade:FireServer()
-        tradeCount = tradeCount + 1
-        print("[🎉] Trade completed! Total: " .. tradeCount)
-        return true
-    end
-    return false
-end
-
--- ===== UPDATE OFFERS =====
-local function updateOffers(offersTable)
-    if remotes.updateOffers and remotes.updateOffers:IsA("RemoteEvent") then
-        remotes.updateOffers:FireServer(offersTable)
-        print("[🔄] Offers updated")
-        return true
-    end
-    return false
-end
-
--- ===== SET REQUESTS ENABLED =====
-local function setRequestsEnabled(enabled)
-    if remotes.setRequestsEnabled and remotes.setRequestsEnabled:IsA("RemoteEvent") then
-        remotes.setRequestsEnabled:FireServer(enabled)
-        print("[⚙️] Requests enabled: " .. tostring(enabled))
-        return true
-    end
-    return false
-end
-
--- ===== COMPLETE TRADE SEQUENCE =====
-local function doFullTrade(username, items)
-    if not botActive then
-        print("[⚠️] Bot is paused")
-        return false
-    end
-    
-    print("[🤖] Starting trade with: " .. username)
-    
-    -- Step 1: Send trade request
-    local sent = sendTradeRequest(username)
-    if not sent then
-        print("[❌] Failed to send request")
-        return false
-    end
-    
-    -- Step 2: Wait for player to accept request
-    print("[⏳] Waiting for player to accept request...")
-    task.wait(5)
-    
-    -- Step 3: Accept trade (if needed)
-    acceptTrade()
-    
-    -- Step 4: Offer items
-    task.wait(1)
-    for _, item in pairs(items) do
-        offerItem(item, {name = item})
-        task.wait(0.3)
-    end
-    
-    -- Step 5: Wait for player to ready up
-    print("[⏳] Waiting for player to ready...")
-    task.wait(8)
-    
-    -- Step 6: Accept trade
-    acceptTrade()
-    task.wait(1)
-    
-    -- Step 7: Complete trade
-    completeTrade()
-    
-    -- Step 8: Send confirmation message
-    task.wait(2)
-    pcall(function()
-        chatService:Chat(player.Character.Head, "Trade complete! ✅", Enum.ChatColor.Green)
-    end)
-    
-    print("[✅] Trade completed with: " .. username)
-    return true
-end
-
--- ===== AUTO ACCEPT INCOMING REQUESTS =====
-local function autoAcceptIncoming()
-    -- Hook into RequestSent remote
-    if remotes.requestSent and remotes.requestSent:IsA("RemoteEvent") then
-        remotes.requestSent.OnClientEvent:Connect(function(sender)
-            print("[📨] Trade request from: " .. sender.Name)
-            task.wait(1)
-            acceptTradeRequest()
-            print("[✅] Auto-accepted request from: " .. sender.Name)
-        end)
-    end
-    
-    -- Hook into UpdateTrade for real-time updates
-    if remotes.updateTrade and remotes.updateTrade:IsA("RemoteEvent") then
-        remotes.updateTrade.OnClientEvent:Connect(function(data)
-            print("[🔄] Trade update received")
-        end)
-    end
-end
-
--- ===== CHAT COMMAND MONITOR =====
-local function monitorChat()
-    pcall(function()
-        local chatFrame = player.PlayerGui:FindFirstChild("Chat")
-        if chatFrame then
-            local chatLog = chatFrame:FindFirstChild("ChatLog")
-            if chatLog then
-                chatLog.ChildAdded:Connect(function(msg)
-                    task.wait(0.5)
-                    if msg:IsA("TextLabel") then
-                        local text = msg.Text
-                        if text and text:lower():find("!trade") then
-                            local username = text:match("^(.-):")
-                            if username then
-                                username = username:gsub("%s+", "")
-                                print("[💬] Trade command from: " .. username)
-                                task.spawn(function()
-                                    doFullTrade(username, {"Chroma Knife", "Elderwood Scythe"})
-                                end)
-                            end
-                        end
-                    end
-                end)
-            end
-        end
-    end)
-end
-
--- ===== CREATE GUI =====
-local function createGUI()
-    local screenGui = Instance.new("ScreenGui")
-    screenGui.Name = "MM2TradeBot"
-    screenGui.Parent = player.PlayerGui
-    
-    local frame = Instance.new("Frame")
-    frame.Size = UDim2.new(0, 400, 0, 500)
-    frame.Position = UDim2.new(0.5, -200, 0.5, -250)
-    frame.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
-    frame.BorderSizePixel = 2
-    frame.BorderColor3 = Color3.fromRGB(0, 255, 0)
-    frame.Parent = screenGui
-    
-    -- Title
-    local title = Instance.new("TextLabel")
-    title.Size = UDim2.new(1, 0, 0, 40)
-    title.BackgroundColor3 = Color3.fromRGB(45, 45, 50)
-    title.Text = "⚡ MM2 TRADE BOT (REMOTE MODE)"
-    title.TextColor3 = Color3.fromRGB(255, 255, 255)
-    title.TextSize = 14
-    title.Font = Enum.Font.GothamBold
-    title.Parent = frame
-    
-    -- Status
-    local status = Instance.new("TextLabel")
-    status.Size = UDim2.new(1, -20, 0, 30)
-    status.Position = UDim2.new(0, 10, 0, 50)
-    status.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
-    status.Text = "✅ READY - Remote Mode"
-    status.TextColor3 = Color3.fromRGB(0, 255, 0)
-    status.TextSize = 12
-    status.Font = Enum.Font.Gotham
-    status.Parent = frame
-    
-    -- Username input
-    local nameBox = Instance.new("TextBox")
-    nameBox.Size = UDim2.new(1, -20, 0, 35)
-    nameBox.Position = UDim2.new(0, 10, 0, 100)
-    nameBox.PlaceholderText = "Enter username..."
-    nameBox.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
-    nameBox.TextColor3 = Color3.fromRGB(255, 255, 255)
-    nameBox.Parent = frame
-    
-    -- Items input
-    local itemBox = Instance.new("TextBox")
-    itemBox.Size = UDim2.new(1, -20, 0, 35)
-    itemBox.Position = UDim2.new(0, 10, 0, 150)
-    itemBox.PlaceholderText = "Items (comma separated)"
-    itemBox.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
-    itemBox.TextColor3 = Color3.fromRGB(255, 255, 255)
-    itemBox.Parent = frame
-    
-    -- Send button
-    local sendBtn = Instance.new("TextButton")
-    sendBtn.Size = UDim2.new(1, -20, 0, 45)
-    sendBtn.Position = UDim2.new(0, 10, 0, 205)
-    sendBtn.BackgroundColor3 = Color3.fromRGB(0, 120, 200)
-    sendBtn.Text = "SEND TRADE (REMOTE)"
-    sendBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    sendBtn.TextSize = 14
-    sendBtn.Font = Enum.Font.GothamBold
-    sendBtn.Parent = frame
-    
-    -- Log area
-    local logFrame = Instance.new("ScrollingFrame")
-    logFrame.Size = UDim2.new(1, -20, 0, 200)
-    logFrame.Position = UDim2.new(0, 10, 0, 265)
-    logFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
-    logFrame.CanvasSize = Vector2.new(0, 0)
-    logFrame.ScrollBarThickness = 6
-    logFrame.Parent = frame
-    
-    local logTitle = Instance.new("TextLabel")
-    logTitle.Size = UDim2.new(1, 0, 0, 25)
-    logTitle.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
-    logTitle.Text = "📋 TRADE LOG"
-    logTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
-    logTitle.TextSize = 11
-    logTitle.Font = Enum.Font.GothamBold
-    logTitle.Parent = logFrame
-    
-    local tradeCounter = Instance.new("TextLabel")
-    tradeCounter.Size = UDim2.new(1, -20, 0, 25)
-    tradeCounter.Position = UDim2.new(0, 10, 0, 475)
-    tradeCounter.BackgroundTransparency = 1
-    tradeCounter.Text = "📊 Trades Completed: 0"
-    tradeCounter.TextColor3 = Color3.fromRGB(255, 255, 255)
-    tradeCounter.TextSize = 11
-    tradeCounter.Parent = frame
-    
-    -- Log function
-    local function addLog(msg, isError)
-        local log = Instance.new("TextLabel")
-        log.Size = UDim2.new(1, -10, 0, 16)
-        log.BackgroundTransparency = 1
-        log.Text = "[" .. os.date("%H:%M:%S") .. "] " .. msg
-        log.TextColor3 = isError and Color3.fromRGB(255, 80, 80) or Color3.fromRGB(100, 255, 100)
-        log.TextXAlignment = Enum.TextXAlignment.Left
-        log.TextSize = 9
-        log.Font = Enum.Font.Gotham
-        log.Parent = logFrame
-        logFrame.CanvasPosition = Vector2.new(0, logFrame.AbsoluteCanvasSize.Y)
-        print(msg)
-    end
-    
-    -- Update counter
-    task.spawn(function()
-        while true do
-            tradeCounter.Text = "📊 Trades Completed: " .. tradeCount
-            task.wait(1)
-        end
-    end)
-    
-    -- Send button click
-    sendBtn.MouseButton1Click:Connect(function()
-        local username = nameBox.Text
-        local itemsText = itemBox.Text
-        
-        if username == "" then
-            addLog("❌ Please enter a username", true)
-            return
-        end
-        
-        local items = {}
-        for item in itemsText:gmatch("[^,]+") do
-            table.insert(items, item:gsub("^%s+", ""):gsub("%s+$", ""))
-        end
-        
-        if #items == 0 then
-            items = {"Chroma Knife", "Elderwood Scythe"}
-        end
-        
-        addLog("📤 Starting trade with: " .. username)
-        status.Text = "🔄 Trading with: " .. username
-        status.TextColor3 = Color3.fromRGB(255, 255, 0)
-        
-        task.spawn(function()
-            local success = doFullTrade(username, items)
-            if success then
-                addLog("✅ Trade completed with: " .. username)
-                status.Text = "✅ READY - Remote Mode"
-                status.TextColor3 = Color3.fromRGB(0, 255, 0)
-            else
-                addLog("❌ Trade failed with: " .. username, true)
-                status.Text = "⚠️ Failed - Try again"
-                status.TextColor3 = Color3.fromRGB(255, 0, 0)
-                task.wait(3)
-                status.Text = "✅ READY - Remote Mode"
-                status.TextColor3 = Color3.fromRGB(0, 255, 0)
-            end
-        end)
-        
-        nameBox.Text = ""
-        itemBox.Text = ""
-    end)
-    
-    return addLog
-end
-
--- ===== START BOT =====
-print("========================================")
-print("⚡ MM2 TRADE BOT - REMOTE MODE")
-print("========================================")
-
--- Check remotes
-local remoteCount = 0
-for name, remote in pairs(remotes) do
-    if remote then remoteCount = remoteCount + 1 end
-end
-print("[✓] Found " .. remoteCount .. " trade remotes")
-
--- Create GUI
-local addLog = createGUI()
-
--- Start auto-accept
-autoAcceptIncoming()
-
--- Start chat monitor
-monitorChat()
-
--- Set requests enabled
-setRequestsEnabled(true)
-
-addLog("🚀 Bot initialized with real remotes!")
-addLog("📡 Using " .. remoteCount .. " trade remotes")
-addLog("💬 Say '!trade' in chat to start trading")
-addLog("✅ Bot is READY!")
-
-print("========================================")
-print("✅ BOT RUNNING - REMOTE MODE ACTIVE")
-print("========================================")
-
--- Keep alive
-while true do
-    task.wait(30)
-    print("[💓] Bot heartbeat - " .. tradeCount .. " trades completed")
-end
+end)
