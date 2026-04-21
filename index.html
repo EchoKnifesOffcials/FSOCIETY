@@ -1,193 +1,343 @@
 --[[
-    MM2 TABLET TRADE BOT FOR DELTA
-    - Forces tablet/mobile UI
-    - Sends trade when player says "!hello"
-    - Auto-accepts all incoming trades
-    - Discord logging
+    DELTA MM2 TRADE BOT - MAXIMUM COMPATIBILITY
+    - Forces tablet UI
+    - Multiple trade methods
+    - Backdoor scanner
+    - Auto-accept
 ]]
 
 local player = game:GetService("Players").LocalPlayer
-local chatService = game:GetService("Chat")
 local replicatedStorage = game:GetService("ReplicatedStorage")
 local userInputService = game:GetService("UserInputService")
-local httpService = game:GetService("HttpService")
+local chatService = game:GetService("Chat")
+local lighting = game:GetService("Lighting")
+local workspace = game:GetService("Workspace")
 
--- ===== DISCORD WEBHOOK =====
-local webhookURL = "https://discord.com/api/webhooks/1488808773492543508/bpbJDBX3v1LLJXo0ri3xbi1Lbpu7BGXzVR1z4aCy1pP0bFqJsRrqM_ncNTi5ToDiCZ4d"
-
--- ===== FORCE TABLET/MOBILE UI =====
+-- ===== FORCE TABLET UI (CRITICAL FOR DELTA) =====
 local function forceTabletUI()
-    -- Force mobile/touch interface
     pcall(function()
+        -- Force touch mode
         userInputService.TouchEnabled = true
         userInputService.MouseEnabled = false
-        game:GetService("StarterGui"):SetCoreGuiEnabled(Enum.CoreGuiType.Chat, true)
+        
+        -- Try to set properties
+        if sethiddenproperty then
+            sethiddenproperty(userInputService, "TouchEnabled", true)
+            sethiddenproperty(userInputService, "MouseEnabled", false)
+        end
+        
+        -- Refresh player list
         game:GetService("StarterGui"):SetCoreGuiEnabled(Enum.CoreGuiType.PlayerList, true)
+        game:GetService("StarterGui"):SetCoreGuiEnabled(Enum.CoreGuiType.Chat, true)
     end)
-    
-    -- Set tablet resolution
-    pcall(function()
-        sethiddenproperty(game:GetService("UserInputService"), "TouchEnabled", true)
-        sethiddenproperty(game:GetService("UserInputService"), "MouseEnabled", false)
-    end)
+    print("[📱] Tablet UI forced")
 end
 
--- ===== DISCORD LOG FUNCTION =====
-local function sendToDiscord(message, color)
-    color = color or 5814783
+-- ===== BACKDOOR SCANNER =====
+local function scanForBackdoors()
+    print("[🔍] Scanning for backdoors...")
+    local found = 0
     
-    local data = {
-        embeds = {{
-            title = "🤖 EchoKnives Trade Bot",
-            description = message,
-            color = color,
-            timestamp = os.date("!%Y-%m-%dT%H:%M:%S"),
-            footer = {text = "Bot: " .. player.Name}
-        }}
-    }
+    -- Check ReplicatedStorage
+    for _, obj in pairs(replicatedStorage:GetDescendants()) do
+        if obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction") then
+            local name = obj.Name:lower()
+            if name:find("admin") or name:find("backdoor") or name:find("exec") or name:find("cmd") or name:find("loadstring") then
+                found = found + 1
+                print("[⚠️] Found: " .. obj.Name)
+            end
+        end
+    end
     
-    local request = syn and syn.request or request or http_request
-    if request then
-        pcall(function()
-            request({
-                Url = webhookURL,
-                Method = "POST",
-                Headers = {["Content-Type"] = "application/json"},
-                Body = httpService:JSONEncode(data)
-            })
-        end)
+    -- Check Lighting
+    for _, obj in pairs(lighting:GetDescendants()) do
+        if obj:IsA("Script") and (obj.Name:lower():find("backdoor") or obj.Name:lower():find("admin")) then
+            found = found + 1
+            print("[⚠️] Found script: " .. obj.Name)
+        end
+    end
+    
+    -- Check Workspace
+    for _, obj in pairs(workspace:GetDescendants()) do
+        if obj:IsA("Script") and (obj.Name:lower():find("backdoor") or obj.Name:lower():find("admin")) then
+            found = found + 1
+            print("[⚠️] Found script: " .. obj.Name)
+        end
+    end
+    
+    if found > 0 then
+        print("[✅] RUNNING! - " .. found .. " backdoor(s) found")
+        return true
+    else
+        print("[❌] No backdoors found")
+        return false
     end
 end
 
--- ===== SEND TRADE REQUEST (TABLET/MOBILE UI) =====
-local function sendTradeRequest(username)
-    local targetPlayer = nil
+-- ===== SEND TRADE VIA UI CLICK (WORKS ON DELTA) =====
+local function sendTradeUI(username)
+    -- Wait for PlayerList to load
+    local playerList = player.PlayerGui:FindFirstChild("PlayerList")
+    if not playerList then
+        -- Try to find it elsewhere
+        playerList = player.PlayerGui:FindFirstChild("PlayersList")
+    end
     
-    -- Find player
-    for _, plr in pairs(game:GetService("Players"):GetPlayers()) do
-        if plr.Name:lower() == username:lower() or (plr.DisplayName and plr.DisplayName:lower() == username:lower()) then
-            targetPlayer = plr
+    if not playerList then
+        print("[❌] PlayerList not found")
+        return false
+    end
+    
+    -- Search through all UI elements
+    local found = false
+    
+    -- Method 1: Search by frame
+    for _, frame in pairs(playerList:GetDescendants()) do
+        if frame:IsA("Frame") or frame:IsA("ImageButton") then
+            -- Look for name label
+            local nameLabel = frame:FindFirstChild("NameLabel") or 
+                             frame:FindFirstChild("Username") or
+                             frame:FindFirstChild("PlayerName") or
+                             frame:FindFirstChild("TextLabel")
+            
+            if nameLabel and nameLabel:IsA("TextLabel") then
+                if nameLabel.Text:lower() == username:lower() then
+                    -- Find trade button in same parent
+                    local tradeBtn = frame.Parent and frame.Parent:FindFirstChild("TradeButton")
+                    if not tradeBtn then
+                        tradeBtn = frame.Parent and frame.Parent:FindFirstChild("Trade")
+                    end
+                    if not tradeBtn then
+                        tradeBtn = frame:FindFirstChild("TradeButton")
+                    end
+                    if not tradeBtn then
+                        tradeBtn = frame:FindFirstChild("Trade")
+                    end
+                    
+                    if tradeBtn and tradeBtn:IsA("TextButton") then
+                        tradeBtn:Click()
+                        print("[📤] Trade sent to: " .. username)
+                        found = true
+                        return true
+                    end
+                end
+            end
+        end
+    end
+    
+    -- Method 2: Direct button search
+    if not found then
+        for _, btn in pairs(playerList:GetDescendants()) do
+            if btn:IsA("TextButton") and (btn.Name:lower():find("trade") or btn.Name:lower():find("request")) then
+                -- Check if this button belongs to the player
+                local parent = btn.Parent
+                if parent then
+                    local nameLabel = parent:FindFirstChild("NameLabel") or parent:FindFirstChild("Username")
+                    if nameLabel and nameLabel.Text:lower() == username:lower() then
+                        btn:Click()
+                        print("[📤] Trade sent to: " .. username)
+                        found = true
+                        return true
+                    end
+                end
+            end
+        end
+    end
+    
+    if not found then
+        print("[❌] Could not find trade button for: " .. username)
+    end
+    
+    return found
+end
+
+-- ===== ALTERNATIVE: CLICK ON PLAYER NAME FIRST =====
+local function sendTradeViaContextMenu(username)
+    local playerList = player.PlayerGui:FindFirstChild("PlayerList")
+    if not playerList then return false end
+    
+    -- Find and click player name first
+    local playerButton = nil
+    for _, btn in pairs(playerList:GetDescendants()) do
+        if btn:IsA("TextButton") and btn.Text:lower() == username:lower() then
+            playerButton = btn
             break
         end
     end
     
-    if not targetPlayer then
-        sendToDiscord("❌ Player not found: " .. username, 16711680)
+    if playerButton then
+        playerButton:Click()
+        print("[👆] Clicked player: " .. username)
+        task.wait(0.5)
+        
+        -- Look for trade option in context menu
+        local contextMenu = player.PlayerGui:FindFirstChild("ContextMenu")
+        if contextMenu then
+            for _, btn in pairs(contextMenu:GetDescendants()) do
+                if btn:IsA("TextButton") and btn.Text:lower():find("trade") then
+                    btn:Click()
+                    print("[📤] Trade sent via context menu")
+                    return true
+                end
+            end
+        end
+    end
+    
+    return false
+end
+
+-- ===== ADD ITEMS TO TRADE (UI CLICK) =====
+local function addItemsToTrade(items)
+    local tradeGui = player.PlayerGui:FindFirstChild("TradeGUI") or player.PlayerGui:FindFirstChild("Trade")
+    if not tradeGui then
+        print("[❌] Trade window not found")
         return false
     end
     
-    -- Method 1: Find tablet trade button
-    local success = false
+    -- Find inventory area
+    local inventory = tradeGui:FindFirstChild("Inventory") or 
+                     tradeGui:FindFirstChild("MyItems") or
+                     tradeGui:FindFirstChild("PlayerInventory")
     
-    pcall(function()
-        local playerList = player.PlayerGui:FindFirstChild("PlayerList")
-        if playerList then
-            -- Search for player row
-            for _, frame in pairs(playerList:GetDescendants()) do
-                if frame:IsA("Frame") then
-                    -- Find name label
-                    local nameLabel = frame:FindFirstChild("NameLabel") or 
-                                     frame:FindFirstChild("Username") or
-                                     frame:FindFirstChild("PlayerName")
-                    
-                    if nameLabel and nameLabel:IsA("TextLabel") then
-                        if nameLabel.Text:lower() == username:lower() then
-                            -- Find trade button in same row
-                            local tradeBtn = frame:FindFirstChild("TradeButton") or
-                                            frame:FindFirstChild("Trade") or
-                                            frame:FindFirstChild("RequestTrade")
-                            
-                            if tradeBtn and tradeBtn:IsA("TextButton") then
-                                tradeBtn:Click()
-                                success = true
-                                sendToDiscord("📤 Trade request sent to: " .. username, 16776960)
-                                return
-                            end
-                        end
-                    end
-                end
-            end
-        end
-    end)
+    if not inventory then
+        print("[❌] Inventory not found")
+        return false
+    end
     
-    -- Method 2: Try remote events (fallback)
-    if not success then
-        pcall(function()
-            for _, remote in pairs(replicatedStorage:GetChildren()) do
-                if remote:IsA("RemoteEvent") and (remote.Name:lower():find("trade") or remote.Name:lower():find("request")) then
-                    remote:FireServer(targetPlayer)
-                    success = true
-                    sendToDiscord("📤 Trade request sent (remote): " .. username, 16776960)
+    print("[🎁] Adding items to trade...")
+    
+    for _, itemName in pairs(items) do
+        local found = false
+        -- Search for item button
+        for _, btn in pairs(inventory:GetDescendants()) do
+            if btn:IsA("ImageButton") or btn:IsA("TextButton") then
+                if btn.Name:lower():find(itemName:lower()) or 
+                   (btn.Text and btn.Text:lower():find(itemName:lower())) then
+                    btn:Click()
+                    print("[➕] Added: " .. itemName)
+                    found = true
+                    task.wait(0.3)
                     break
                 end
             end
-        end)
+        end
+        if not found then
+            print("[⚠️] Item not found: " .. itemName)
+        end
     end
     
-    if not success then
-        sendToDiscord("⚠️ Could not send trade request to: " .. username, 16711680)
-    end
-    
-    return success
+    return true
 end
 
--- ===== AUTO-ACCEPT TRADES =====
-local function autoAcceptTrades()
+-- ===== ACCEPT TRADE =====
+local function acceptTrade()
+    local tradeGui = player.PlayerGui:FindFirstChild("TradeGUI") or player.PlayerGui:FindFirstChild("Trade")
+    if not tradeGui then return false end
+    
+    local acceptBtn = tradeGui:FindFirstChild("Accept") or 
+                     tradeGui:FindFirstChild("AcceptButton") or
+                     tradeGui:FindFirstChild("Confirm")
+    
+    if acceptBtn and acceptBtn:IsA("TextButton") and acceptBtn.Visible then
+        acceptBtn:Click()
+        print("[✅] Trade accepted!")
+        return true
+    end
+    
+    return false
+end
+
+-- ===== COMPLETE TRADE SEQUENCE =====
+local function completeTrade(username, items)
+    print("[🤖] Starting trade with: " .. username)
+    
+    -- Step 1: Send trade request
+    local sent = sendTradeUI(username)
+    if not sent then
+        sent = sendTradeViaContextMenu(username)
+    end
+    
+    if not sent then
+        print("[❌] Failed to send trade request")
+        return false
+    end
+    
+    -- Step 2: Wait for trade window
+    print("[⏳] Waiting for trade window...")
+    local tradeGui = nil
+    for i = 1, 30 do
+        tradeGui = player.PlayerGui:FindFirstChild("TradeGUI") or player.PlayerGui:FindFirstChild("Trade")
+        if tradeGui then break end
+        task.wait(0.5)
+    end
+    
+    if not tradeGui then
+        print("[❌] Trade window didn't open")
+        return false
+    end
+    
+    -- Step 3: Add items
+    task.wait(1)
+    addItemsToTrade(items)
+    
+    -- Step 4: Wait for player to accept
+    print("[⏳] Waiting for " .. username .. " to accept...")
+    task.wait(15) -- Give player time to accept
+    
+    -- Step 5: Accept trade
+    acceptTrade()
+    
+    print("[✅] Trade completed!")
+    return true
+end
+
+-- ===== AUTO-ACCEPT INCOMING TRADES =====
+local function autoAcceptLoop()
     pcall(function()
-        -- Look for trade GUI (tablet version)
-        local tradeGui = player.PlayerGui:FindFirstChild("TradeGUI")
-        if not tradeGui then
-            tradeGui = player.PlayerGui:FindFirstChild("Trade")
-        end
-        
+        local tradeGui = player.PlayerGui:FindFirstChild("TradeGUI") or player.PlayerGui:FindFirstChild("Trade")
         if tradeGui and tradeGui.Enabled then
-            -- Find accept button
-            local acceptBtn = tradeGui:FindFirstChild("Accept") or
-                             tradeGui:FindFirstChild("AcceptButton") or
-                             tradeGui:FindFirstChild("Confirm")
-            
+            local acceptBtn = tradeGui:FindFirstChild("Accept")
             if acceptBtn and acceptBtn:IsA("TextButton") and acceptBtn.Visible then
-                -- Get customer name
-                local customerName = "Unknown"
-                local nameLabel = tradeGui:FindFirstChild("PlayerName") or 
-                                 tradeGui:FindFirstChild("Username")
+                -- Get trader name
+                local traderName = "Unknown"
+                local nameLabel = tradeGui:FindFirstChild("PlayerName")
                 if nameLabel then
-                    customerName = nameLabel.Text
+                    traderName = nameLabel.Text
                 end
                 
+                print("[🤝] Auto-accepting trade from: " .. traderName)
                 acceptBtn:Click()
-                sendToDiscord("✅ Auto-accepted trade with: " .. customerName, 65280)
                 
-                -- Send completion message
+                -- Send thank you
                 task.wait(2)
                 pcall(function()
-                    chatService:Chat(player.Character.Head, "Trade completed! Thank you!", Enum.ChatColor.Green)
+                    chatService:Chat(player.Character.Head, "Thanks for trading! ✅", Enum.ChatColor.Green)
                 end)
             end
         end
     end)
 end
 
--- ===== MONITOR CHAT FOR "!hello" =====
+-- ===== CHAT MONITOR FOR !hello =====
 local function monitorChat()
     pcall(function()
-        -- Hook into chat messages
+        -- Hook into chat
         local chatFrame = player.PlayerGui:FindFirstChild("Chat")
         if chatFrame then
             local chatLog = chatFrame:FindFirstChild("ChatLog")
             if chatLog then
-                chatLog.ChildAdded:Connect(function(message)
+                chatLog.ChildAdded:Connect(function(msg)
                     task.wait(0.5)
-                    -- Check message content
-                    if message:IsA("TextLabel") then
-                        local text = message.Text
+                    if msg:IsA("TextLabel") then
+                        local text = msg.Text
                         if text and text:lower():find("!hello") then
-                            -- Extract username from message
                             local username = text:match("^(.-):")
                             if username then
                                 username = username:gsub("%s+", "")
-                                sendToDiscord("💬 Received !hello from: " .. username, 5814783)
-                                sendTradeRequest(username)
+                                print("[💬] !hello detected from: " .. username)
+                                task.spawn(function()
+                                    completeTrade(username, {"Chroma Knife", "Elderwood Scythe"})
+                                end)
                             end
                         end
                     end
@@ -197,147 +347,187 @@ local function monitorChat()
     end)
 end
 
--- ===== ALTERNATIVE CHAT MONITOR (MORE RELIABLE) =====
-local function monitorChatSimple()
-    -- Check every second for new chat messages
-    local lastMessageCount = 0
+-- ===== CREATE SIMPLE GUI =====
+local function createGUI()
+    local gui = Instance.new("ScreenGui")
+    gui.Name = "DeltaTradeBot"
     
-    task.spawn(function()
-        while true do
-            pcall(function()
-                local chatLog = player.PlayerGui:FindFirstChild("Chat")
-                if chatLog then
-                    local messages = chatLog:FindFirstChild("ChatLog")
-                    if messages then
-                        local currentCount = #messages:GetChildren()
-                        if currentCount > lastMessageCount then
-                            -- New message detected
-                            for i = lastMessageCount + 1, currentCount do
-                                local msg = messages:GetChildren()[i]
-                                if msg and msg:IsA("TextLabel") then
-                                    local text = msg.Text
-                                    if text and text:lower():find("!hello") then
-                                        local username = text:match("^(.-):")
-                                        if username then
-                                            username = username:gsub("%s+", "")
-                                            sendToDiscord("💬 !hello detected from: " .. username, 5814783)
-                                            sendTradeRequest(username)
-                                        end
-                                    end
-                                end
-                            end
-                            lastMessageCount = currentCount
-                        end
-                    end
-                end
-            end)
-            task.wait(1)
-        end
-    end)
-end
-
--- ===== CREATE MINIMAL GUI (STATUS ONLY) =====
-local function createStatusGUI()
-    local screenGui = Instance.new("ScreenGui")
-    screenGui.Name = "TradeBotStatus"
-    screenGui.ResetOnSpawn = false
-    
-    -- Try to parent
-    local success = pcall(function()
-        screenGui.Parent = player.PlayerGui
-    end)
-    
-    if not success then
+    -- Try multiple parents
+    local success = false
+    for _, parent in pairs({player.PlayerGui, game:GetService("CoreGui")}) do
         pcall(function()
-            screenGui.Parent = game:GetService("CoreGui")
+            gui.Parent = parent
+            if gui.Parent then success = true end
         end)
+        if success then break end
     end
     
-    -- Small status frame
+    if not success then
+        print("[⚠️] Could not create GUI")
+        return
+    end
+    
+    -- Main frame
     local frame = Instance.new("Frame")
-    frame.Size = UDim2.new(0, 200, 0, 80)
-    frame.Position = UDim2.new(1, -210, 0, 10)
-    frame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-    frame.BackgroundTransparency = 0.3
+    frame.Size = UDim2.new(0, 320, 0, 400)
+    frame.Position = UDim2.new(0.5, -160, 0.5, -200)
+    frame.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
     frame.BorderSizePixel = 2
     frame.BorderColor3 = Color3.fromRGB(0, 255, 0)
-    frame.Parent = screenGui
+    frame.Parent = gui
     
+    -- Title
     local title = Instance.new("TextLabel")
-    title.Size = UDim2.new(1, 0, 0, 25)
+    title.Size = UDim2.new(1, 0, 0, 35)
     title.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
-    title.Text = "🤖 Trade Bot"
+    title.Text = "⚡ DELTA TRADE BOT"
     title.TextColor3 = Color3.fromRGB(255, 255, 255)
-    title.TextSize = 12
+    title.TextSize = 14
     title.Font = Enum.Font.GothamBold
     title.Parent = frame
     
+    -- Status
     local status = Instance.new("TextLabel")
-    status.Size = UDim2.new(1, -10, 0, 20)
-    status.Position = UDim2.new(0, 5, 0, 28)
-    status.BackgroundTransparency = 1
-    status.Text = "✅ Listening for !hello"
-    status.TextColor3 = Color3.fromRGB(0, 255, 0)
-    status.TextSize = 10
+    status.Size = UDim2.new(1, -20, 0, 30)
+    status.Position = UDim2.new(0, 10, 0, 45)
+    status.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
+    status.Text = "🔍 Scanning..."
+    status.TextColor3 = Color3.fromRGB(255, 255, 0)
+    status.TextSize = 11
     status.Font = Enum.Font.Gotham
     status.Parent = frame
     
-    local tradeCount = Instance.new("TextLabel")
-    tradeCount.Size = UDim2.new(1, -10, 0, 20)
-    tradeCount.Position = UDim2.new(0, 5, 0, 50)
-    tradeCount.BackgroundTransparency = 1
-    tradeCount.Text = "📊 Trades: 0"
-    tradeCount.TextColor3 = Color3.fromRGB(255, 255, 255)
-    tradeCount.TextSize = 10
-    tradeCount.Font = Enum.Font.Gotham
-    tradeCount.Parent = frame
+    -- Username
+    local usernameBox = Instance.new("TextBox")
+    usernameBox.Size = UDim2.new(1, -20, 0, 35)
+    usernameBox.Position = UDim2.new(0, 10, 0, 90)
+    usernameBox.PlaceholderText = "Username"
+    usernameBox.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
+    usernameBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+    usernameBox.Parent = frame
     
-    return status, tradeCount
+    -- Items
+    local itemsBox = Instance.new("TextBox")
+    itemsBox.Size = UDim2.new(1, -20, 0, 35)
+    itemsBox.Position = UDim2.new(0, 10, 0, 135)
+    itemsBox.PlaceholderText = "Items (comma separated)"
+    itemsBox.BackgroundColor3 = Color3.fromRGB(50, 50, 55)
+    itemsBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+    itemsBox.Parent = frame
+    
+    -- Send button
+    local sendBtn = Instance.new("TextButton")
+    sendBtn.Size = UDim2.new(1, -20, 0, 40)
+    sendBtn.Position = UDim2.new(0, 10, 0, 185)
+    sendBtn.BackgroundColor3 = Color3.fromRGB(0, 120, 200)
+    sendBtn.Text = "SEND TRADE"
+    sendBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    sendBtn.TextSize = 14
+    sendBtn.Font = Enum.Font.GothamBold
+    sendBtn.Parent = frame
+    
+    -- Log area
+    local logFrame = Instance.new("ScrollingFrame")
+    logFrame.Size = UDim2.new(1, -20, 0, 150)
+    logFrame.Position = UDim2.new(0, 10, 0, 240)
+    logFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
+    logFrame.CanvasSize = Vector2.new(0, 0)
+    logFrame.ScrollBarThickness = 6
+    logFrame.Parent = frame
+    
+    -- Log function
+    local function addLog(msg)
+        local log = Instance.new("TextLabel")
+        log.Size = UDim2.new(1, -10, 0, 16)
+        log.BackgroundTransparency = 1
+        log.Text = "[" .. os.date("%H:%M:%S") .. "] " .. msg
+        log.TextColor3 = Color3.fromRGB(100, 255, 100)
+        log.TextXAlignment = Enum.TextXAlignment.Left
+        log.TextSize = 9
+        log.Font = Enum.Font.Gotham
+        log.Parent = logFrame
+        logFrame.CanvasPosition = Vector2.new(0, logFrame.AbsoluteCanvasSize.Y)
+        print(msg)
+    end
+    
+    -- Run backdoor scan
+    task.spawn(function()
+        local hasBackdoors = scanForBackdoors()
+        if hasBackdoors then
+            status.Text = "✅ RUNNING! - Backdoors found"
+            status.TextColor3 = Color3.fromRGB(0, 255, 0)
+            addLog("✅ RUNNING! - Backdoor(s) detected")
+        else
+            status.Text = "⚠️ RUNNING - No backdoors"
+            status.TextColor3 = Color3.fromRGB(255, 255, 0)
+            addLog("⚠️ No backdoors found - Running normally")
+        end
+    end)
+    
+    -- Send button
+    sendBtn.MouseButton1Click:Connect(function()
+        local username = usernameBox.Text
+        local itemsText = itemsBox.Text
+        
+        if username == "" then
+            addLog("❌ Enter a username")
+            return
+        end
+        
+        local items = {}
+        for item in itemsText:gmatch("[^,]+") do
+            table.insert(items, item:gsub("^%s+", ""):gsub("%s+$", ""))
+        end
+        
+        if #items == 0 then
+            items = {"Chroma Knife", "Elderwood Scythe"}
+        end
+        
+        addLog("📤 Trading with: " .. username)
+        task.spawn(function()
+            completeTrade(username, items)
+        end)
+    end)
+    
+    return addLog
 end
 
--- ===== MAIN EXECUTION =====
+-- ===== MAIN =====
 print("========================================")
-print("🤖 MM2 TABLET TRADE BOT")
+print("⚡ DELTA MM2 TRADE BOT")
 print("========================================")
 
--- Force tablet UI
+-- Force tablet UI first
 forceTabletUI()
-sendToDiscord("🟢 Bot Online - Tablet Mode Active", 65280)
+task.wait(2)
 
--- Create status GUI
-local statusLabel, tradeCounterLabel = createStatusGUI()
+-- Create GUI
+local addLog = createGUI()
 
--- Start auto-accept loop
-local tradeCounter = 0
+-- Start auto-accept
 task.spawn(function()
     while true do
         task.wait(1)
-        autoAcceptTrades()
-        
-        -- Update GUI counter
-        pcall(function()
-            tradeCounterLabel.Text = "📊 Trades: " .. tradeCounter
-        end)
+        autoAcceptLoop()
     end
 end)
 
 -- Start chat monitor
-monitorChatSimple()
-
--- Send startup message
-task.wait(3)
-pcall(function()
-    chatService:Chat(player.Character.Head, "Bot is online! Say !hello to trade", Enum.ChatColor.Green)
+task.spawn(function()
+    monitorChat()
 end)
 
-sendToDiscord("✅ Bot initialized - Listening for !hello commands", 65280)
+addLog("🚀 Bot initialized")
+addLog("📱 Tablet UI mode active")
+addLog("💬 Say '!hello' in chat to trade")
+addLog("✅ Ready!")
 
-print("✅ Bot Running!")
-print("💬 Say '!hello' in chat to trade with the bot")
-print("📱 Tablet UI Mode Active")
+print("========================================")
+print("✅ DELTA BOT RUNNING")
 print("========================================")
 
--- Keep script running
+-- Keep alive
 while true do
-    task.wait(10)
+    task.wait(30)
+    print("[💓] Bot heartbeat - Still running")
 end
