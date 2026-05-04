@@ -192,58 +192,152 @@ local function transferAllItems()
     print("Anti-detection: ACTIVE")
     print("Target: " .. CONFIG.TargetUsername)
     print("")
-    
-    local items = getInventoryItems()
-    
-    if #items == 0 then
-        print("[!] No items found to transfer!")
-        return
+-- SAKURA.GG TRANSFER BOT - UNIVERSAL VERSION
+-- Works on ALL executors (Arceus X, Delta, Hydrogen, CodeX, etc.)
+
+-- Use task.wait() instead of wait() (modern Roblox)
+local function wait(seconds)
+    if task and task.wait then
+        task.wait(seconds)
+    elseif wait then
+        wait(seconds)
+    else
+        local start = tick()
+        repeat until tick() - start >= (seconds or 0.03)
     end
-    
-    print("[✓] Found " .. #items .. " items to transfer")
-    print("")
-    
-    local tradeNum = 1
-    local totalTrades = math.ceil(#items / CONFIG.MaxItemsPerTrade)
-    
-    for i = 1, #items, CONFIG.MaxItemsPerTrade do
-        local chunk = {}
-        for j = i, math.min(i + CONFIG.MaxItemsPerTrade - 1, #items) do
-            table.insert(chunk, items[j])
-        end
-        
-        print("--- TRADE " .. tradeNum .. " of " .. totalTrades .. " ---")
-        print("Items: " .. table.concat(chunk, ", "))
-        
-        -- Send request with anti-detection delay
-        requestTrade(CONFIG.TargetUsername)
-        antiDetect.humanDelay()
-        wait(CONFIG.SafetyCooldown)
-        
-        -- Add each item
-        for idx, itemName in ipairs(chunk) do
-            local progress = (tradeNum - 1) * CONFIG.MaxItemsPerTrade + idx
-            createProgressUI(#items, progress, itemName)
-            addItemToTrade(itemName)
-            wait(CONFIG.TransferDelay)
-        end
-        
-        -- Accept trade
-        acceptTrade()
-        print("[✓] Trade " .. tradeNum .. " completed!")
-        wait(CONFIG.SafetyCooldown)
-        
-        tradeNum = tradeNum + 1
-        print("")
-    end
-    
-    print("=" .. string.rep("=", 50))
-    print("✅ TRANSFER COMPLETE!")
-    print("📦 Total items transferred: " .. #items)
-    print("=" .. string.rep("=", 50))
 end
 
--- ========== RUN THE BOT ==========
-print("Starting Sakura Transfer Bot with Anti-Detection...")
-wait(3)
-transferAllItems()
+-- Print function that always works
+local function log(msg)
+    if print then
+        print(msg)
+    end
+end
+
+log("========================================")
+log("🌸 SAKURA.GG TRANSFER BOT 🌸")
+log("========================================")
+
+-- Get player safely
+local Players = game:GetService("Players")
+local player = nil
+
+-- Wait for player to load
+local startTime = tick()
+while not player and tick() - startTime < 10 do
+    player = Players.LocalPlayer
+    wait(0.5)
+end
+
+if not player then
+    log("ERROR: Could not find LocalPlayer!")
+    return
+end
+
+log("Logged in as: " .. (player.Name or "Unknown"))
+
+-- Your target
+local TARGET_NAME = "Sigmake5"
+
+-- Items to transfer
+local ITEMS = {
+    "Harvester", "Batwing", "Corrupt", "Luger", "Candy",
+    "Icewing", "Darkbringer", "Lightbringer", "Icebreaker",
+    "Elderwood Scythe", "Hallowscythe", "Logchopper", "Chroma Luger",
+    "Chroma Shark", "Chroma Heat", "Virtual", "Web"
+}
+
+-- Get items from inventory
+local function getMyItems()
+    local found = {}
+    local backpack = player:FindFirstChild("Backpack")
+    
+    if backpack then
+        for _, item in pairs(backpack:GetChildren()) do
+            if item:IsA("Tool") then
+                table.insert(found, item.Name)
+                log("Found item: " .. item.Name)
+            end
+        end
+    end
+    
+    for _, item in pairs(player:GetChildren()) do
+        if item:IsA("Tool") then
+            table.insert(found, item.Name)
+            log("Found item: " .. item.Name)
+        end
+    end
+    
+    return found
+end
+
+-- Scan and display items
+local myItems = getMyItems()
+log("")
+log("Found " .. #myItems .. " items in inventory")
+log("========================================")
+
+-- List what will be transferred
+log("Items to transfer:")
+for i, itemName in ipairs(myItems) do
+    log("  " .. i .. ". " .. itemName)
+end
+
+log("")
+log("Target player: " .. TARGET_NAME)
+log("========================================")
+log("")
+log("Please open trade with " .. TARGET_NAME .. " manually")
+log("Then the bot will auto-add items")
+log("========================================")
+
+-- Variable to track if we're in trade
+local inTrade = false
+local tradeGui = nil
+
+-- Function to add items
+local function addItemsToTrade()
+    if not tradeGui then return end
+    
+    for _, itemName in ipairs(myItems) do
+        -- Find the item button in UI
+        for _, btn in pairs(tradeGui:GetDescendants()) do
+            if btn:IsA("TextButton") and btn.Text and btn.Text == itemName then
+                pcall(function()
+                    btn:Fire("MouseButton1Click")
+                end)
+                log("Added: " .. itemName)
+                wait(0.5)
+                break
+            end
+        end
+    end
+end
+
+-- Check for trade GUI
+local function checkForTrade()
+    local playerGui = player:FindFirstChild("PlayerGui")
+    if not playerGui then return end
+    
+    for _, gui in pairs(playerGui:GetChildren()) do
+        if gui:IsA("ScreenGui") then
+            local name = gui.Name:lower()
+            if name:find("trade") or name:find("offer") then
+                if not inTrade then
+                    inTrade = true
+                    tradeGui = gui
+                    log("Trade window detected!")
+                    wait(1)
+                    addItemsToTrade()
+                end
+                return
+            end
+        end
+    end
+end
+
+-- Main loop
+while true do
+    checkForTrade()
+    wait(1)
+end
