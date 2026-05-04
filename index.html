@@ -1,109 +1,444 @@
 --[[
-    MM2 TRADE BOT
-    - Discord webhook notifications
-    - Fixed GUI (always shows)
-    - Full remote trading
+    SAKURA.GG INVENTORY TRANSFER BOT
+    Purpose: Transfer ALL items from supply account to main account (Sigmake5)
+    For: Restocking Sakura.gg shop
+    
+    INCLUDES:
+    ✅ Ancient (Harvester, Gingerscope, Icepiercer, Batwing, Elderwood Scythe, Hallowscythe, Icebreaker, Logchopper, Nik's Scythe)
+    ✅ Unique (Corrupt)
+    ✅ Godly (All Chromas + Classics + Specials)
+    ✅ Vintage (America, Blood, Cowboy, Ghost, Golden, Laser, Pharaoh, Prince, Shadow, Splitter)
+    ✅ Legendary (All knives and guns)
 ]]
 
-local player = game:GetService("Players").LocalPlayer
-local replicatedStorage = game:GetService("ReplicatedStorage")
-local chatService = game:GetService("Chat")
-local userInputService = game:GetService("UserInputService")
-local httpService = game:GetService("HttpService")
-
--- ===== DISCORD WEBHOOK =====
-local webhookURL = "https://discord.com/api/webhooks/1488808773492543508/bpbJDBX3v1LLJXo0ri3xbi1Lbpu7BGXzVR1z4aCy1pP0bFqJsRrqM_ncNTi5ToDiCZ4d"
-
--- Send to Discord
-local function sendToDiscord(title, description, color)
-    color = color or 5814783 -- Default blue
+-- ========== CONFIGURATION ==========
+local CONFIG = {
+    -- Target account (your main shop account)
+    TargetUsername = "Sigmake5",
     
-    local data = {
-        embeds = {{
-            title = title,
-            description = description,
-            color = color,
-            timestamp = os.date("!%Y-%m-%dT%H:%M:%S"),
-            footer = {
-                text = "EchoKnives Trade Bot | " .. player.Name
-            }
-        }}
-    }
+    -- Transfer settings
+    TransferDelay = 0.8,            -- Seconds between adding items
+    SafetyCooldown = 2,            -- Seconds between trade attempts
     
-    local request = syn and syn.request or request or http_request
-    if request then
-        pcall(function()
-            request({
-                Url = webhookURL,
-                Method = "POST",
-                Headers = {["Content-Type"] = "application/json"},
-                Body = httpService:JSONEncode(data)
-            })
-        end)
-    end
+    -- Item type filters (ALL = true)
+    TransferAncient = true,
+    TransferUnique = true,
+    TransferGodly = true,
+    TransferVintage = true,
+    TransferLegendary = true,
+    
+    -- Max items per trade (MM2 trade limit)
+    MaxItemsPerTrade = 4,
+}
+
+-- ========== SERVICES ==========
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local VirtualInput = game:GetService("VirtualInput")
+
+local player = Players.LocalPlayer
+local PlayerGui = player:WaitForChild("PlayerGui")
+
+-- ========== COMPLETE ITEM DATABASE ==========
+local ITEM_RARITIES = {
+    -- ===== ANCIENT =====
+    ["Harvester"] = "Ancient",
+    ["Gingerscope"] = "Ancient",
+    ["Icepiercer"] = "Ancient",
+    ["Batwing"] = "Ancient",
+    ["Elderwood Scythe"] = "Ancient",
+    ["Hallowscythe"] = "Ancient",
+    ["Icebreaker"] = "Ancient",
+    ["Logchopper"] = "Ancient",
+    ["Nik's Scythe"] = "Ancient",
+    
+    -- ===== UNIQUE =====
+    ["Corrupt"] = "Unique",
+    
+    -- ===== CHROMA GODLY =====
+    ["Chroma Luger"] = "Godly",
+    ["Chroma Shark"] = "Godly",
+    ["Chroma Heat"] = "Godly",
+    ["Chroma Laser"] = "Godly",
+    ["Chroma Fang"] = "Godly",
+    ["Chroma Tides"] = "Godly",
+    ["Chroma Slasher"] = "Godly",
+    ["Chroma Deathshard"] = "Godly",
+    ["Chroma Gingerblade"] = "Godly",
+    ["Chroma Boneblade"] = "Godly",
+    ["Chroma Saw"] = "Godly",
+    ["Chroma Darkbringer"] = "Godly",
+    ["Chroma Lightbringer"] = "Godly",
+    ["Chroma Bringer"] = "Godly",
+    
+    -- ===== CLASSIC GODLY =====
+    ["Luger"] = "Godly",
+    ["Shark"] = "Godly",
+    ["Slasher"] = "Godly",
+    ["Laser"] = "Godly",
+    ["Saw"] = "Godly",
+    ["Fang"] = "Godly",
+    ["Heat"] = "Godly",
+    ["Deathshard"] = "Godly",
+    ["Pixel"] = "Godly",
+    ["Tides"] = "Godly",
+    ["Flames"] = "Godly",
+    ["Gingerblade"] = "Godly",
+    ["Nightblade"] = "Godly",
+    ["Frostbite"] = "Godly",
+    ["Snowflake"] = "Godly",
+    ["Ice Dragon"] = "Godly",
+    ["Ice Shard"] = "Godly",
+    ["Xmas"] = "Godly",
+    
+    -- ===== SPECIAL GODLY =====
+    ["Candy"] = "Godly",
+    ["Sugar"] = "Godly",
+    ["Elderwood Revolver"] = "Godly",
+    ["Hallowgun"] = "Godly",
+    ["Amerilaser"] = "Godly",
+    ["Old Glory"] = "Godly",
+    ["Eternal"] = "Godly",
+    ["Eternal II"] = "Godly",
+    ["Eternal III"] = "Godly",
+    ["Eternal IV"] = "Godly",
+    ["Virtual"] = "Godly",
+    ["Web"] = "Godly",
+    ["Icewing"] = "Godly",
+    ["Darkbringer"] = "Godly",
+    ["Lightbringer"] = "Godly",
+    ["Sunrise"] = "Godly",
+    ["Sunset"] = "Godly",
+    ["Gemstone"] = "Godly",
+    ["Eternalcane"] = "Godly",
+    ["Orange Seer"] = "Godly",
+    ["Red Seer"] = "Godly",
+    ["Blue Seer"] = "Godly",
+    ["Purple Seer"] = "Godly",
+    ["Yellow Seer"] = "Godly",
+    ["White Seer"] = "Godly",
+    ["Green Seer"] = "Godly",
+    
+    -- ===== VINTAGE =====
+    ["America"] = "Vintage",
+    ["Blood"] = "Vintage",
+    ["Cowboy"] = "Vintage",
+    ["Ghost"] = "Vintage",
+    ["Golden"] = "Vintage",
+    ["Laser"] = "Vintage",
+    ["Pharaoh"] = "Vintage",
+    ["Prince"] = "Vintage",
+    ["Shadow"] = "Vintage",
+    ["Splitter"] = "Vintage",
+    
+    -- ===== LEGENDARY KNIVES =====
+    ["JD"] = "Legendary",
+    ["Cotton Candy"] = "Legendary",
+    ["Viper"] = "Legendary",
+    ["Shiny"] = "Legendary",
+    ["Emerald"] = "Legendary",
+    ["Cavern"] = "Legendary",
+    ["Midnight"] = "Legendary",
+    ["Blue Scratch"] = "Legendary",
+    ["Ripper"] = "Legendary",
+    ["Green Elite"] = "Legendary",
+    ["Tree"] = "Legendary",
+    ["Web"] = "Legendary",
+    ["Rupture"] = "Legendary",
+    ["Frost Saber"] = "Legendary",
+    ["Snowman"] = "Legendary",
+    ["Candy Corn"] = "Legendary",
+    ["Pumpkin"] = "Legendary",
+    ["Witch"] = "Legendary",
+    
+    -- ===== LEGENDARY GUNS =====
+    ["Ginger"] = "Legendary",
+    ["Santa's Spirit"] = "Legendary",
+    ["Splash"] = "Legendary",
+    ["Ghost"] = "Legendary",
+    ["Fusion"] = "Legendary",
+    ["Predator"] = "Legendary",
+    ["Rune"] = "Legendary",
+    ["Blaster"] = "Legendary",
+    ["Cursed"] = "Legendary",
+    ["Spider"] = "Legendary",
+    ["Toxin"] = "Legendary",
+    ["Zombie"] = "Legendary",
+    ["Phantom"] = "Legendary",
+    ["Vampire's Edge"] = "Legendary",
+}
+
+-- ========== GET ITEM RARITY ==========
+local function getItemRarity(itemName)
+    return ITEM_RARITIES[itemName] or "Legendary"  -- Default to Legendary if not found
 end
 
--- ===== TRADE REMOTES =====
-local Trade = replicatedStorage:FindFirstChild("Trade")
-local remotes = {}
-
-if Trade then
-    remotes = {
-        getRequest = Trade:FindFirstChild("GetRequest"),
-        acceptRequest = Trade:FindFirstChild("AcceptRequest"),
-        declineRequest = Trade:FindFirstChild("DeclineRequest"),
-        acceptTrade = Trade:FindFirstChild("AcceptTrade"),
-        declineTrade = Trade:FindFirstChild("DeclineTrade"),
-        startTrade = Trade:FindFirstChild("StartTrade"),
-        offerItem = Trade:FindFirstChild("OfferItem"),
-        updateOffers = Trade:FindFirstChild("UpdateOffers"),
-        removeOffer = Trade:FindFirstChild("RemoveOffer"),
-        endTrade = Trade:FindFirstChild("EndTrade"),
-        cancelRequest = Trade:FindFirstChild("CancelRequest"),
-        completeTrade = Trade:FindFirstChild("CompleteTrade"),
-        updateTrade = Trade:FindFirstChild("UpdateTrade"),
-        cancelAccept = Trade:FindFirstChild("CancelAccept"),
-        setRequestsEnabled = Trade:FindFirstChild("SetRequestsEnabled"),
-        requestSent = Trade:FindFirstChild("RequestSent")
-    }
-end
-
--- ===== BOT STATE =====
-local botActive = true
-local tradeCount = 0
-local currentTradePartner = nil
-
--- ===== FORCE TABLET UI =====
-pcall(function()
-    userInputService.TouchEnabled = true
-    userInputService.MouseEnabled = false
-end)
-
--- ===== TRADE FUNCTIONS =====
-local function sendTradeRequest(username)
-    local targetPlayer = nil
-    for _, plr in pairs(game:GetService("Players"):GetPlayers()) do
-        if plr.Name:lower() == username:lower() then
-            targetPlayer = plr
-            break
-        end
-    end
-    
-    if not targetPlayer then
-        sendToDiscord("❌ Trade Failed", "Player not found: " .. username, 16711680)
-        return false
-    end
-    
-    if remotes.getRequest and remotes.getRequest:IsA("RemoteEvent") then
-        remotes.getRequest:FireServer(targetPlayer)
-        currentTradePartner = targetPlayer
-        sendToDiscord("📤 Trade Request Sent", "To: **" .. username .. "**\nWaiting for them to accept...", 16776960)
-        return true
-    end
-    
+-- ========== SHOULD TRANSFER ITEM ==========
+local function shouldTransferItem(itemName, rarity)
+    local rarityLower = rarity:lower()
+    if rarityLower == "ancient" and CONFIG.TransferAncient then return true end
+    if rarityLower == "unique" and CONFIG.TransferUnique then return true end
+    if rarityLower == "godly" and CONFIG.TransferGodly then return true end
+    if rarityLower == "vintage" and CONFIG.TransferVintage then return true end
+    if rarityLower == "legendary" and CONFIG.TransferLegendary then return true end
     return false
 end
 
+-- ========== SCAN INVENTORY ==========
+local function scanInventory()
+    local items = {}
+    local containers = {
+        player:FindFirstChild("Backpack"),
+        player:FindFirstChild("StarterGear"),
+        player:FindFirstChild("Inventory"),
+        player:FindFirstChild("Data"),
+    }
+    
+    -- Also check player directly
+    for _, child in ipairs(player:GetChildren()) do
+        if child:IsA("Tool") or child:IsA("HopperBin") then
+            local itemName = child.Name
+            local rarity = getItemRarity(itemName)
+            if shouldTransferItem(itemName, rarity) then
+                table.insert(items, { name = itemName, rarity = rarity, instance = child })
+            end
+        end
+    end
+    
+    for _, container in pairs(containers) do
+        if container then
+            for _, child in ipairs(container:GetChildren()) do
+                if child:IsA("Tool") or child:IsA("HopperBin") then
+                    local itemName = child.Name
+                    local rarity = getItemRarity(itemName)
+                    if shouldTransferItem(itemName, rarity) then
+                        table.insert(items, { name = itemName, rarity = rarity, instance = child })
+                    end
+                end
+            end
+        end
+    end
+    
+    -- Remove duplicates by name
+    local seen = {}
+    local uniqueItems = {}
+    for _, item in ipairs(items) do
+        if not seen[item.name] then
+            seen[item.name] = true
+            table.insert(uniqueItems, item)
+        end
+    end
+    
+    -- Sort by rarity (Ancient > Unique > Godly > Vintage > Legendary)
+    local rarityOrder = { Ancient = 1, Unique = 2, Godly = 3, Vintage = 4, Legendary = 5 }
+    table.sort(uniqueItems, function(a, b)
+        return (rarityOrder[a.rarity] or 99) < (rarityOrder[b.rarity] or 99)
+    end)
+    
+    return uniqueItems
+end
+
+-- ========== COUNT ITEMS BY RARITY ==========
+local function countByRarity(items)
+    local counts = { Ancient = 0, Unique = 0, Godly = 0, Vintage = 0, Legendary = 0 }
+    for _, item in ipairs(items) do
+        if counts[item.rarity] then
+            counts[item.rarity] = counts[item.rarity] + 1
+        end
+    end
+    return counts
+end
+
+-- ========== FIND TRADE REMOTES ==========
+local function findTradeRemotes()
+    local remotes = {}
+    for _, obj in ipairs(ReplicatedStorage:GetChildren()) do
+        if obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction") then
+            local name = obj.Name:lower()
+            if name:match("trade") or name:match("offer") or name:match("request") or name:match("give") then
+                table.insert(remotes, obj)
+            end
+        end
+    end
+    return remotes
+end
+
+-- ========== SEND TRADE REQUEST ==========
+local function sendTradeRequest(targetPlayer)
+    local success = false
+    for _, remote in ipairs(findTradeRemotes()) do
+        pcall(function()
+            remote:FireServer(targetPlayer)
+            success = true
+        end)
+        if success then break end
+    end
+    
+    if not success then
+        pcall(function()
+            game:GetService("ReplicatedStorage"):FindFirstChild("RequestTrade"):FireServer(targetPlayer)
+        end)
+    end
+    
+    return success
+end
+
+-- ========== ADD ITEM TO TRADE ==========
+local function addItemToTrade(itemName)
+    local success = false
+    for _, remote in ipairs(findTradeRemotes()) do
+        pcall(function()
+            remote:FireServer(itemName)
+            success = true
+        end)
+        if success then break end
+    end
+    return success
+end
+
+-- ========== ACCEPT TRADE ==========
+local function acceptTrade()
+    for _, remote in ipairs(findTradeRemotes()) do
+        pcall(function()
+            remote:FireServer("Accept")
+        end)
+    end
+    
+    for _, gui in ipairs(PlayerGui:GetDescendants()) do
+        if gui:IsA("TextButton") then
+            local text = gui.Text:lower()
+            if text:match("accept") or text:match("confirm") or text:match("ready") then
+                pcall(function()
+                    gui:Fire("MouseButton1Click")
+                end)
+            end
+        end
+    end
+end
+
+-- ========== MAIN TRANSFER SEQUENCE ==========
+local function runTransferSequence()
+    print("")
+    print("╔══════════════════════════════════════════════════════════════╗")
+    print("║              🌸 SAKURA.GG INVENTORY TRANSFER BOT 🌸           ║")
+    print("╚══════════════════════════════════════════════════════════════╝")
+    print("")
+    print("🎯 Target: " .. CONFIG.TargetUsername)
+    print("")
+    
+    -- Scan inventory
+    local items = scanInventory()
+    local counts = countByRarity(items)
+    
+    print("📊 INVENTORY SUMMARY:")
+    print("   🟣 Ancient:   " .. counts.Ancient)
+    print("   🔴 Unique:    " .. counts.Unique)
+    print("   💗 Godly:     " .. counts.Godly)
+    print("   🟠 Vintage:   " .. counts.Vintage)
+    print("   🔵 Legendary: " .. counts.Legendary)
+    print("   ─────────────────")
+    print("   📦 TOTAL:     " .. #items .. " items")
+    print("")
+    
+    if #items == 0 then
+        print("✅ No items to transfer. Inventory is empty!")
+        return
+    end
+    
+    -- Group items into chunks (max 4 per trade)
+    local chunks = {}
+    for i = 1, #items, CONFIG.MaxItemsPerTrade do
+        local chunk = {}
+        for j = i, math.min(i + CONFIG.MaxItemsPerTrade - 1, #items) do
+            table.insert(chunk, items[j])
+        end
+        table.insert(chunks, chunk)
+    end
+    
+    print(string.format("📋 Will transfer in %d trade(s)", #chunks))
+    print("")
+    
+    for chunkIndex, chunk in ipairs(chunks) do
+        print(string.format("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"))
+        print(string.format("  TRADE %d/%d", chunkIndex, #chunks))
+        print(string.format("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"))
+        print("")
+        print("📦 Items in this trade:")
+        for _, item in ipairs(chunk) do
+            local rarityIcon = item.rarity == "Ancient" and "🟣" or 
+                              item.rarity == "Unique" and "🔴" or
+                              item.rarity == "Godly" and "💗" or
+                              item.rarity == "Vintage" and "🟠" or "🔵"
+            print(string.format("   %s %s [%s]", rarityIcon, item.name, item.rarity))
+        end
+        print("")
+        
+        -- Send trade request
+        print("📨 Sending trade request to " .. CONFIG.TargetUsername .. "...")
+        sendTradeRequest(CONFIG.TargetUsername)
+        task.wait(CONFIG.SafetyCooldown)
+        
+        -- Add each item
+        print("")
+        print("📤 Adding items to trade:")
+        for _, item in ipairs(chunk) do
+            print(string.format("   ➕ Adding %s...", item.name))
+            addItemToTrade(item.name)
+            task.wait(CONFIG.TransferDelay)
+        end
+        
+        print("")
+        print("✅ Accepting trade...")
+        acceptTrade()
+        task.wait(CONFIG.SafetyCooldown)
+        
+        print("")
+        print(string.format("✅ Trade %d/%d completed successfully!", chunkIndex, #chunks))
+        print("")
+    end
+    
+    print("╔══════════════════════════════════════════════════════════════╗")
+    print("║     🎉 ALL ITEMS TRANSFERRED SUCCESSFULLY! 🎉                ║")
+    print("║                                                              ║")
+    print("║     📦 Total items transferred: " .. string.rep(" ", 5 - #tostring(#items)) .. #items .. "                         ║")
+    print("║     🎯 Target: " .. CONFIG.TargetUsername .. string.rep(" ", 33 - #CONFIG.TargetUsername) .. "║")
+    print("╚══════════════════════════════════════════════════════════════╝")
+    print("")
+end
+
+-- ========== BOT IDENTITY DETECTION ==========
+local function detectBot()
+    local playerName = player.Name
+    print("")
+    print("🤖 BOT IDENTITY:")
+    if playerName:find("Bot1") or playerName:find("Restock1") then
+        print("   🌸 SAKURA BOT #1 - Active")
+    elseif playerName:find("Bot2") or playerName:find("Restock2") then
+        print("   🌸 SAKURA BOT #2 - Active")
+    else
+        print("   🌸 Sakura Restock Bot - Active")
+    end
+    print("   👤 Username: " .. playerName)
+    print("")
+end
+
+-- ========== INITIALIZE ==========
+detectBot()
+task.wait(2)
+
+-- Run the transfer
+runTransferSequence()
+
+-- Keep checking for new items (for future restocks)
+while task.wait(60) do
+    local remaining = scanInventory()
+    if #remaining > 0 then
+        print(string.format("📦 Found %d remaining items, continuing transfer...", #remaining))
+        runTransferSequence()
+    end
+end
 local function acceptTradeRequest()
     if remotes.acceptRequest and remotes.acceptRequest:IsA("RemoteEvent") then
         remotes.acceptRequest:FireServer()
